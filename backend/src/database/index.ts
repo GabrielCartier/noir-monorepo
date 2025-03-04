@@ -1,71 +1,112 @@
-import { SupabaseDatabaseAdapter } from '@elizaos/adapter-supabase';
+import { PostgresDatabaseAdapter } from '@elizaos/adapter-postgres';
 import type { Goal, Memory, UUID } from '@elizaos/core';
-import {} from '@supabase/supabase-js';
-export class ExtendedSupabaseDatabaseAdapter extends SupabaseDatabaseAdapter {
-  async createMemory(
-    memory: Memory,
-    tableName: string,
-    unique = false,
-  ): Promise<void> {
-    // const createdAt = memory.createdAt ?? Date.now();
-    // Convert milliseconds timestamp to ISO string
-    const createdAt = memory.createdAt
-      ? new Date(memory.createdAt).toISOString()
-      : new Date().toISOString();
+import { elizaLogger } from '@elizaos/core';
 
-    if (unique) {
-      const opts = {
-        // TODO: Add ID option, optionally
-        query_table_name: tableName,
-        query_userid: memory.userId,
-        query_content: memory.content.text,
-        query_roomid: memory.roomId,
-        query_embedding: memory.embedding,
-        query_createdAt: createdAt,
-        similarity_threshold: 0.95,
-      };
+export class ExtendedPostgresDatabaseAdapter extends PostgresDatabaseAdapter {
+  private isInitialized = false;
+  private isClosing = false;
+  private static isInitializing = false;
+  private static readonly MAX_RETRIES = 3;
+  private static readonly RETRY_DELAY = 2000; // 2 seconds
 
-      const result = await this.supabase.rpc(
-        'check_similarity_and_insert',
-        opts,
-      );
+  constructor() {
+    const postgresUrl = process.env.POSTGRES_URL;
+    if (!postgresUrl) {
+      throw new Error('POSTGRES_URL environment variable is required');
+    }
+    super({
+      connectionString: postgresUrl,
+      parseInputs: true,
+      maxRetries: ExtendedPostgresDatabaseAdapter.MAX_RETRIES,
+      retryDelay: ExtendedPostgresDatabaseAdapter.RETRY_DELAY,
+    });
 
-      if (result.error) {
-        throw new Error(JSON.stringify(result.error));
-      }
-    } else {
-      const result = await this.supabase
-        .from('memories')
-        .insert({ ...memory, createdAt, type: tableName });
-      const { error } = result;
-      if (error) {
-        throw new Error(JSON.stringify(error));
-      }
+    // Set up process signal handlers
+    process.on('SIGINT', () => {
+      this.close().catch((error) => {
+        elizaLogger.error('Error during SIGINT shutdown:', error);
+      });
+    });
+
+    process.on('SIGTERM', () => {
+      this.close().catch((error) => {
+        elizaLogger.error('Error during SIGTERM shutdown:', error);
+      });
+    });
+
+    process.on('uncaughtException', (error) => {
+      elizaLogger.error('Uncaught exception:', error);
+    });
+
+    process.on('unhandledRejection', (reason, promise) => {
+      elizaLogger.error('Unhandled rejection at', promise, 'reason:', reason);
+      this.close().catch((closeError) => {
+        elizaLogger.error('Error during rejection shutdown:', closeError);
+      });
+    });
+  }
+
+  async init() {
+    if (this.isInitialized) {
+      return;
+    }
+
+    if (ExtendedPostgresDatabaseAdapter.isInitializing) {
+      return;
+    }
+
+    ExtendedPostgresDatabaseAdapter.isInitializing = true;
+
+    try {
+      await super.init();
+      this.isInitialized = true;
+      elizaLogger.success('Database connection initialized successfully');
+    } catch (error) {
+      elizaLogger.error('Database initialization failed:', error);
+      throw error;
+    } finally {
+      ExtendedPostgresDatabaseAdapter.isInitializing = false;
     }
   }
+
+  async close() {
+    if (this.isClosing) {
+      return;
+    }
+
+    this.isClosing = true;
+
+    try {
+      await super.close();
+      this.isInitialized = false;
+      elizaLogger.success('Database connection closed successfully');
+    } catch (error) {
+      elizaLogger.error('Error closing database connection:', error);
+      throw error;
+    } finally {
+      this.isClosing = false;
+    }
+  }
+
+  async createMemory(memory: Memory, tableName: string): Promise<void> {
+    try {
+      await super.createMemory(memory, tableName);
+    } catch (error) {
+      elizaLogger.error('Error creating memory:', error);
+      throw error;
+    }
+  }
+
   async getGoals(params: {
     roomId: UUID;
     userId?: UUID | null;
     onlyInProgress?: boolean;
     count?: number;
   }): Promise<Goal[]> {
-    const opts = {
-      query_roomid: params.roomId,
-      query_userid: params.userId,
-      only_in_progress: params.onlyInProgress,
-      row_count: params.count,
-    };
-
     try {
-      const { data: goals, error } = await this.supabase.rpc('get_goals', opts);
-      if (error) {
-        console.error('Error getting goals', error);
-        throw new Error(error.message);
-      }
-
-      return goals;
+      return await super.getGoals(params);
     } catch (error) {
-      console.error('Error getting goals', error);
+      elizaLogger.error('Error getting goals:', error);
       return [];
     }
   }
@@ -79,54 +120,20 @@ export class ExtendedSupabaseDatabaseAdapter extends SupabaseDatabaseAdapter {
     start?: number;
     end?: number;
   }): Promise<Memory[]> {
-    console.log('Getting memories', params);
-    const query = this.supabase
-      // .from(params.tableName) error here trying to get messages table. tableName is the filter field
-      .from('memories')
-      .select('*')
-      .eq('roomId', params.roomId);
+    const startDate = params.start
+      ? new Date(params.start).toISOString()
+      : undefined;
 
-    if (params.start) {
-      // Convert milliseconds to seconds and create a Date object
-      const startDate = new Date(params.start);
-      query.gte('createdAt', startDate.toISOString());
-      // query.gte("createdAt", params.start);
-    }
+    const endDate = params.end ? new Date(params.end).toISOString() : undefined;
 
-    if (params.end) {
-      // Convert milliseconds to seconds and create a Date object
-      const endDate = new Date(params.end);
-      query.lte('createdAt', endDate.toISOString());
-      // query.lte("createdAt", params.end);
-    }
-
-    if (params.unique) {
-      query.eq('unique', true);
-    }
-
-    if (params.agentId) {
-      query.eq('agentId', params.agentId);
-    }
-
-    query.order('createdAt', { ascending: false });
-
-    if (params.count) {
-      query.limit(params.count);
-    }
-
-    const { data, error } = await query;
-
-    if (error) {
-      throw new Error(`Error retrieving memories: ${error.message}`);
-    }
-
-    return data as Memory[];
+    return super.getMemories({
+      ...params,
+      start: startDate ? new Date(startDate).getTime() : undefined,
+      end: endDate ? new Date(endDate).getTime() : undefined,
+    });
   }
 }
 
-const supabaseAdapter = new ExtendedSupabaseDatabaseAdapter(
-  process.env.SUPABASE_URL!,
-  process.env.SUPABASE_ANON_KEY!,
-);
-
-export default supabaseAdapter;
+// Create a singleton instance
+const instance = new ExtendedPostgresDatabaseAdapter();
+export default instance;

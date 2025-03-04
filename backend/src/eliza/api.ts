@@ -1,10 +1,12 @@
 import {
+  type Character,
   type Client,
   type Content,
   type IAgentRuntime,
   type Memory,
   ModelClass,
   type Plugin,
+  type State,
   composeContext,
   elizaLogger,
   generateMessageResponse,
@@ -14,6 +16,7 @@ import {
   stringToUuid,
 } from '@elizaos/core';
 import { Elysia } from 'elysia';
+import postgresAdapter from '../database';
 
 export const messageHandlerTemplate =
   // {{goals}}
@@ -77,48 +80,163 @@ Response format should be formatted in a JSON block like this:
 \`\`\`
 `;
 
+interface MessageRequest {
+  roomId?: string;
+  userId?: string;
+  userName?: string;
+  name?: string;
+  text?: string;
+  agentId?: string;
+}
+
 export class ApiClient {
   public app: Elysia;
-  private agents: Map<string, IAgentRuntime>; // container management
-  private server: any; // Store server instance
-  public startAgent: Function; // Store startAgent functor
-  public loadCharacterTryPath: Function; // Store loadCharacterTryPath functor
-  public jsonToCharacter: Function; // Store jsonToCharacter functor
+  private agents: Map<string, IAgentRuntime>;
+  public server: ReturnType<Elysia['listen']> | null = null;
+  public startAgent: ((character: Character) => Promise<IAgentRuntime>) | null =
+    null;
+  public loadCharacterTryPath: ((path: string) => Promise<Character>) | null =
+    null;
+  public jsonToCharacter: ((json: unknown) => Character) | null = null;
+  private isInitialized = false;
 
   constructor() {
     elizaLogger.log('DirectClient constructor');
     this.app = new Elysia();
     this.agents = new Map();
+    this.setupRoutes();
 
-    // TODO Typing
-    // Set up message endpoint
-    this.app.post('/:agentId/message', async ({ params, body }) => {
-      const { agentId } = params;
-      const roomId = stringToUuid(body.roomId ?? `default-room-${agentId}`);
-      const userId = stringToUuid(body.userId ?? 'user');
+    // Set up lifecycle hooks
+    this.app.onStart(async () => {
+      if (this.isInitialized) {
+        elizaLogger.log(
+          '[ApiClient] Already initialized, skipping initialization',
+        );
+      } else {
+        elizaLogger.log('[ApiClient] Initializing...');
+        try {
+          await postgresAdapter.init();
+          this.isInitialized = true;
+          elizaLogger.log('[ApiClient] Initialized successfully');
+        } catch (error) {
+          elizaLogger.error('[ApiClient] Failed to initialize:', error);
+          throw error;
+        }
+      }
+    });
 
-      let runtime = this.agents.get(agentId);
+    this.app.onStop(async () => {
+      elizaLogger.log('[ApiClient] Stopping...');
+      try {
+        // Close all agent connections
+        this.agents.clear();
 
-      // if runtime is null, look for runtime with the same name
-      if (!runtime) {
-        runtime = Array.from(this.agents.values()).find(
-          (a) => a.character.name.toLowerCase() === agentId.toLowerCase(),
+        // Close database connection
+        await postgresAdapter.close();
+        this.isInitialized = false;
+        elizaLogger.log('[ApiClient] Stopped successfully');
+      } catch (error) {
+        elizaLogger.error('[ApiClient] Error during shutdown:', error);
+        throw error;
+      }
+    });
+  }
+
+  private setupRoutes() {
+    // Handle both /message and /:agentId/message patterns
+    this.app.post('/message', async (context) => {
+      try {
+        elizaLogger.info('[ApiClient] Message endpoint called');
+        const body = context.body as MessageRequest;
+        elizaLogger.info(
+          `[ApiClient] Message request received: ${JSON.stringify(body, null, 2)}`,
+        );
+
+        if (!body.agentId) {
+          elizaLogger.error('[ApiClient] No agentId provided in request');
+          return Response.json(
+            { error: 'No agentId provided' },
+            { status: 400 },
+          );
+        }
+
+        const agent = this.agents.get(body.agentId);
+        if (!agent) {
+          elizaLogger.error(
+            `[ApiClient] Agent not found for ID/name: ${body.agentId}`,
+          );
+          return Response.json({ error: 'Agent not found' }, { status: 404 });
+        }
+
+        elizaLogger.info(
+          `[ApiClient] Processing message for agent: ${agent.character.name} (${agent.agentId})`,
+        );
+        return this.handleMessage(agent, body);
+      } catch (error) {
+        elizaLogger.error('[ApiClient] Error processing message:', error);
+        return Response.json(
+          {
+            error:
+              error instanceof Error ? error.message : 'Unknown error occurred',
+          },
+          { status: 500 },
         );
       }
+    });
 
-      if (!runtime) {
-        return new Response('Agent not found', { status: 404 });
+    // Legacy route for backward compatibility
+    this.app.post('/:agentId/message', async ({ params, body }) => {
+      try {
+        elizaLogger.info(
+          `[ApiClient] Legacy message endpoint called for agent ${params.agentId}`,
+        );
+        const requestBody = body as MessageRequest;
+        requestBody.agentId = params.agentId; // Ensure agentId is set from URL param
+
+        const agent = this.agents.get(params.agentId);
+        if (!agent) {
+          elizaLogger.error(
+            `[ApiClient] Agent not found for ID/name: ${params.agentId}`,
+          );
+          return Response.json({ error: 'Agent not found' }, { status: 404 });
+        }
+
+        elizaLogger.info(
+          `[ApiClient] Processing message for agent: ${agent.character.name} (${agent.agentId})`,
+        );
+        return this.handleMessage(agent, requestBody);
+      } catch (error) {
+        elizaLogger.error(
+          '[ApiClient] Error processing legacy message:',
+          error,
+        );
+        return Response.json(
+          {
+            error:
+              error instanceof Error ? error.message : 'Unknown error occurred',
+          },
+          { status: 500 },
+        );
       }
+    });
+  }
 
-      await runtime.ensureConnection(
+  private async handleMessage(agent: IAgentRuntime, request: MessageRequest) {
+    try {
+      elizaLogger.info('[ApiClient] Starting message handling');
+      const { agentId } = request;
+      const roomId = stringToUuid(request.roomId ?? `default-room-${agentId}`);
+      const userId = stringToUuid(request.userId ?? 'user');
+
+      await agent.ensureConnection(
         userId,
         roomId,
-        body.userName,
-        body.name,
+        request.userName,
+        request.name,
         'direct',
       );
 
-      const text = body.text;
+      const text = request.text;
       // if empty text, directly return
       if (!text) {
         return Response.json([]);
@@ -135,64 +253,80 @@ export class ApiClient {
         content,
         userId,
         roomId,
-        agentId: runtime.agentId,
+        agentId: agent.agentId,
       };
       const memory: Memory = {
         id: stringToUuid(`${messageId}-${userId}`),
         ...userMessage,
-        agentId: runtime.agentId,
+        agentId: agent.agentId,
         userId,
         roomId,
         content,
       };
-      await runtime.messageManager.addEmbeddingToMemory(memory);
-      await runtime.messageManager.createMemory(memory);
+      await agent.messageManager.addEmbeddingToMemory(memory);
+      await agent.messageManager.createMemory(memory);
 
-      console.log('Composing state');
-      let state;
+      elizaLogger.info('[ApiClient] Composing state');
+      let state: State | undefined;
       try {
-        state = await runtime.composeState(userMessage, {
-          agentName: runtime.character.name,
+        state = await agent.composeState(userMessage, {
+          agentName: agent.character.name,
         });
       } catch (error) {
-        console.error('Error composing state', error);
+        elizaLogger.error('[ApiClient] Error composing state:', error);
+        return Response.json(
+          { error: 'Failed to compose state' },
+          { status: 500 },
+        );
       }
 
-      console.log('state composed');
+      if (!state) {
+        return Response.json(
+          { error: 'Failed to compose state' },
+          { status: 500 },
+        );
+      }
+
+      elizaLogger.info('[ApiClient] State composed successfully');
       const context = composeContext({
         state,
         template: messageHandlerTemplate,
       });
-      console.log('Context', context);
+      elizaLogger.info('[ApiClient] Context composed successfully');
+
+      elizaLogger.info('[ApiClient] Generating message response');
       const response = await generateMessageResponse({
-        runtime: runtime,
+        runtime: agent,
         context,
         modelClass: ModelClass.LARGE,
       });
-      console.log('Response', response);
+      elizaLogger.info('[ApiClient] Message response generated');
+
       if (!response) {
-        return new Response('No response from generateMessageResponse', {
-          status: 500,
-        });
+        return Response.json(
+          { error: 'No response generated' },
+          { status: 500 },
+        );
       }
 
       // save response to memory
       const responseMessage: Memory = {
-        id: stringToUuid(`${messageId}-${runtime.agentId}`),
+        id: stringToUuid(`${messageId}-${agent.agentId}`),
         ...userMessage,
-        userId: runtime.agentId,
+        userId: agent.agentId,
         content: response,
         embedding: getEmbeddingZeroVector(),
         createdAt: Date.now(),
       };
-      console.log('Response message', responseMessage);
-      await runtime.messageManager.createMemory(responseMessage);
+      elizaLogger.info('[ApiClient] Saving response to memory');
+      await agent.messageManager.createMemory(responseMessage);
 
-      state = await runtime.updateRecentMessageState(state);
-      console.log('State', state);
+      state = await agent.updateRecentMessageState(state);
+      elizaLogger.info('[ApiClient] State updated with recent messages');
+
       let message = null as Content | null;
-      console.log('Message', message);
-      await runtime.processActions(
+      elizaLogger.info('[ApiClient] Processing actions');
+      await agent.processActions(
         memory,
         [responseMessage],
         state,
@@ -201,29 +335,34 @@ export class ApiClient {
           return [memory];
         },
       );
-      console.log('Processed actions');
-      await runtime.evaluate(memory, state);
-      console.log('Evaluated');
+      elizaLogger.info('[ApiClient] Actions processed');
+
+      await agent.evaluate(memory, state);
+      elizaLogger.info('[ApiClient] State evaluated');
+
       // Check if we should suppress the initial message
-      const action = runtime.actions.find((a) => a.name === response.action);
+      const action = agent.actions.find((a) => a.name === response.action);
       const shouldSuppressInitialMessage = action?.suppressInitialMessage;
-      console.log(
-        'Should suppress initial message',
-        shouldSuppressInitialMessage,
+      elizaLogger.info(
+        `[ApiClient] Should suppress initial message: ${shouldSuppressInitialMessage}`,
       );
 
-      if (shouldSuppressInitialMessage) {
-        if (message) {
-          Response.json([message]);
-        } else {
-          Response.json([]);
-        }
-      } else if (message) {
-        Response.json([message]);
-      } else {
-        return Response.json([]);
-      }
-    });
+      // Include the response content even if no actions were processed
+      const responseContent = message ? [message] : [response];
+      elizaLogger.info(
+        `[ApiClient] Sending response: ${JSON.stringify(responseContent, null, 2)}`,
+      );
+      return Response.json(responseContent);
+    } catch (error) {
+      elizaLogger.error('[ApiClient] Error in handleMessage:', error);
+      return Response.json(
+        {
+          error:
+            error instanceof Error ? error.message : 'Unknown error occurred',
+        },
+        { status: 500 },
+      );
+    }
   }
 
   // agent/src/index.ts:startAgent calls this
@@ -238,39 +377,24 @@ export class ApiClient {
   }
 
   public start(port: number) {
+    elizaLogger.log(`[ApiClient] Starting server on port ${port}`);
     this.server = this.app.listen(port, () => {
       elizaLogger.success(
         `REST API bound to 0.0.0.0:${port}. If running locally, access it at http://localhost:${port}.`,
       );
     });
-
-    // Handle graceful shutdown
-    const gracefulShutdown = () => {
-      elizaLogger.log('Received shutdown signal, closing server...');
-      this.server.close(() => {
-        elizaLogger.success('Server closed successfully');
-        process.exit(0);
-      });
-
-      // Force close after 5 seconds if server hasn't closed
-      setTimeout(() => {
-        elizaLogger.error(
-          'Could not close connections in time, forcefully shutting down',
-        );
-        process.exit(1);
-      }, 5000);
-    };
-
-    // Handle different shutdown signals
-    process.on('SIGTERM', gracefulShutdown);
-    process.on('SIGINT', gracefulShutdown);
   }
 
   public async stop() {
+    elizaLogger.log('[ApiClient] Stop method called');
     if (this.server) {
+      elizaLogger.log('[ApiClient] Closing server...');
+      // @ts-ignore - Elysia's server type doesn't include close method, but it exists at runtime
       this.server.close(() => {
-        elizaLogger.success('Server stopped');
+        elizaLogger.log('[ApiClient] Server closed successfully');
       });
+    } else {
+      elizaLogger.log('[ApiClient] No server to stop');
     }
   }
 }

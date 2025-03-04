@@ -12,7 +12,7 @@
     "backend:dev": "bun run --cwd backend dev",
     "prepare": "husky",
     "lint": "biome check .",
-    "format": "biome format . --write",
+    "format": "biome format . --write"
   },
   "devDependencies": {
     "@biomejs/biome": "latest",
