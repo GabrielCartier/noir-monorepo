@@ -28,7 +28,7 @@
       "recommended": true,
       "correctness": {
         "noConstantMathMinMaxClamp": "error",
-        "noNodejsModules": "error",
+        "noNodejsModules": "warn",
         "noUnusedImports": "error",
         "noUnusedPrivateClassMembers": "error",
         "noUnusedVariables": "error",

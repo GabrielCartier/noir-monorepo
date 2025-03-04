@@ -1,7 +1,7 @@
-import { Elysia } from 'elysia';
+import { elizaLogger } from '@elizaos/core';
+import { startAgents } from './eliza';
 
-const app = new Elysia().get('/', () => 'Hello Elysia').listen(3000);
-
-console.log(
-  `🦊 Elysia is running at ${app.server?.hostname}:${app.server?.port}`,
-);
+startAgents().catch((error) => {
+  elizaLogger.error('Unhandled error in startAgents:', error);
+  process.exit(1);
+});
