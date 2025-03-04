@@ -9,9 +9,8 @@
     "lint:unsafe": "biome lint --write --unsafe ."
   },
   "dependencies": {
-    "@elizaos-plugins/adapter-supabase": "github:elizaos-plugins/adapter-supabase",
-    "@elizaos/adapter-supabase": "^0.25.6-alpha.1",
-    "@elizaos/core": "^0.25.9",
+    "@elizaos/adapter-postgres": "^0.25.6-alpha.1",
+    "@elizaos/core": "^0.25.6-alpha.1",
     "@elizaos/plugin-evm": "^0.25.6-alpha.1",
     "elysia": "latest",
     "yargs": "^17.7.2"
