@@ -101,7 +101,6 @@ export class ApiClient {
   private isInitialized = false;
 
   constructor() {
-    elizaLogger.log('DirectClient constructor');
     this.app = new Elysia();
     this.agents = new Map();
     this.setupRoutes();
@@ -109,15 +108,10 @@ export class ApiClient {
     // Set up lifecycle hooks
     this.app.onStart(async () => {
       if (this.isInitialized) {
-        elizaLogger.log(
-          '[ApiClient] Already initialized, skipping initialization',
-        );
       } else {
-        elizaLogger.log('[ApiClient] Initializing...');
         try {
           await postgresAdapter.init();
           this.isInitialized = true;
-          elizaLogger.log('[ApiClient] Initialized successfully');
         } catch (error) {
           elizaLogger.error('[ApiClient] Failed to initialize:', error);
           throw error;
@@ -148,9 +142,6 @@ export class ApiClient {
       try {
         elizaLogger.info('[ApiClient] Message endpoint called');
         const body = context.body as MessageRequest;
-        elizaLogger.info(
-          `[ApiClient] Message request received: ${JSON.stringify(body, null, 2)}`,
-        );
 
         if (!body.agentId) {
           elizaLogger.error('[ApiClient] No agentId provided in request');
@@ -168,9 +159,6 @@ export class ApiClient {
           return Response.json({ error: 'Agent not found' }, { status: 404 });
         }
 
-        elizaLogger.info(
-          `[ApiClient] Processing message for agent: ${agent.character.name} (${agent.agentId})`,
-        );
         return this.handleMessage(agent, body);
       } catch (error) {
         elizaLogger.error('[ApiClient] Error processing message:', error);
@@ -201,9 +189,6 @@ export class ApiClient {
           return Response.json({ error: 'Agent not found' }, { status: 404 });
         }
 
-        elizaLogger.info(
-          `[ApiClient] Processing message for agent: ${agent.character.name} (${agent.agentId})`,
-        );
         return this.handleMessage(agent, requestBody);
       } catch (error) {
         elizaLogger.error(
@@ -266,7 +251,6 @@ export class ApiClient {
       await agent.messageManager.addEmbeddingToMemory(memory);
       await agent.messageManager.createMemory(memory);
 
-      elizaLogger.info('[ApiClient] Composing state');
       let state: State | undefined;
       try {
         state = await agent.composeState(userMessage, {
@@ -287,20 +271,16 @@ export class ApiClient {
         );
       }
 
-      elizaLogger.info('[ApiClient] State composed successfully');
       const context = composeContext({
         state,
         template: messageHandlerTemplate,
       });
-      elizaLogger.info('[ApiClient] Context composed successfully');
 
-      elizaLogger.info('[ApiClient] Generating message response');
       const response = await generateMessageResponse({
         runtime: agent,
         context,
         modelClass: ModelClass.LARGE,
       });
-      elizaLogger.info('[ApiClient] Message response generated');
 
       if (!response) {
         return Response.json(
@@ -318,14 +298,11 @@ export class ApiClient {
         embedding: getEmbeddingZeroVector(),
         createdAt: Date.now(),
       };
-      elizaLogger.info('[ApiClient] Saving response to memory');
       await agent.messageManager.createMemory(responseMessage);
 
       state = await agent.updateRecentMessageState(state);
-      elizaLogger.info('[ApiClient] State updated with recent messages');
 
       let message = null as Content | null;
-      elizaLogger.info('[ApiClient] Processing actions');
       await agent.processActions(
         memory,
         [responseMessage],
@@ -335,23 +312,16 @@ export class ApiClient {
           return [memory];
         },
       );
-      elizaLogger.info('[ApiClient] Actions processed');
 
       await agent.evaluate(memory, state);
-      elizaLogger.info('[ApiClient] State evaluated');
 
       // Check if we should suppress the initial message
       const action = agent.actions.find((a) => a.name === response.action);
+      // TODO Handle this
       const shouldSuppressInitialMessage = action?.suppressInitialMessage;
-      elizaLogger.info(
-        `[ApiClient] Should suppress initial message: ${shouldSuppressInitialMessage}`,
-      );
 
       // Include the response content even if no actions were processed
       const responseContent = message ? [message] : [response];
-      elizaLogger.info(
-        `[ApiClient] Sending response: ${JSON.stringify(responseContent, null, 2)}`,
-      );
       return Response.json(responseContent);
     } catch (error) {
       elizaLogger.error('[ApiClient] Error in handleMessage:', error);

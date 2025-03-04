@@ -13,6 +13,7 @@ import evmPlugin from '@elizaos/plugin-evm';
 import { initializeDbCache } from '../cache/initialize-db-cache';
 import { startChat } from '../chat';
 import { initializeClients } from '../clients';
+import { configureApiRoutes } from '../config/api-routes';
 import {
   getTokenForProvider,
   loadCharacters,
@@ -89,29 +90,14 @@ async function startAgent(character: Character, directClient: ApiClient) {
     );
 
     db = await initializeDatabase();
-    elizaLogger.info('[Agent] Database initialized');
-
-    elizaLogger.info('[Agent] Initializing cache');
     const cache = initializeDbCache(character, db);
-    elizaLogger.info('[Agent] Cache initialized');
 
-    elizaLogger.info('[Agent] Creating agent runtime');
     const runtime = createAgent(character, db, cache, token);
-    elizaLogger.info('[Agent] Agent runtime created');
 
-    elizaLogger.info('[Agent] Initializing agent runtime');
     await runtime.initialize();
-    elizaLogger.info('[Agent] Agent runtime initialized');
-
-    elizaLogger.info('[Agent] Initializing clients');
     runtime.clients = await initializeClients(character, runtime);
-    elizaLogger.info('[Agent] Clients initialized');
 
-    elizaLogger.info('[Agent] Registering agent with API client');
     directClient.registerAgent(runtime);
-    elizaLogger.info(
-      `[Agent] Successfully registered agent ${character.name}-${character.id} as ${runtime.agentId}`,
-    );
 
     return runtime;
   } catch (error) {
@@ -130,40 +116,28 @@ async function startAgent(character: Character, directClient: ApiClient) {
 export const startAgents = async () => {
   elizaLogger.info('[StartAgents] Starting agents initialization');
   const directClient = new ApiClient();
+  configureApiRoutes(directClient.app);
   const serverPort = Number.parseInt(settings.SERVER_PORT || '3000');
   const args = parseArguments();
 
   const charactersArg = args.characters || args.character;
   let characters = [character];
 
-  elizaLogger.info(`[StartAgents] Characters argument: ${charactersArg}`);
   if (charactersArg) {
-    elizaLogger.info('[StartAgents] Loading characters from argument');
     characters = await loadCharacters(charactersArg);
-    elizaLogger.info(`[StartAgents] Loaded ${characters.length} characters`);
   }
 
   try {
     for (const character of characters) {
-      elizaLogger.info(
-        `[StartAgents] Starting agent for character: ${character.name}`,
-      );
       await startAgent(character, directClient as ApiClient);
-      elizaLogger.info(
-        `[StartAgents] Successfully started agent for character: ${character.name}`,
-      );
     }
   } catch (error) {
     elizaLogger.error('[StartAgents] Error starting agents:', error);
     throw error;
   }
 
-  elizaLogger.info(`[StartAgents] Starting server on port ${serverPort}`);
   // upload some agent functionality into directClient
   directClient.startAgent = async (character: Character) => {
-    elizaLogger.info(
-      `[StartAgents] Starting additional agent for character: ${character.name}`,
-    );
     return startAgent(character, directClient);
   };
 
