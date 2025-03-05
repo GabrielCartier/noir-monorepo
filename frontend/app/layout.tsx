@@ -1,16 +1,13 @@
+import { Web3Provider } from '@/components/providers/web3-provider';
 import { Toaster } from '@/components/ui/toaster';
 import { Inter } from 'next/font/google';
 import './globals.css';
-import { WalletProvider } from '@/components/providers/wallet-provider';
 import { ThemeProvider } from 'next-themes';
+import type { PropsWithChildren } from 'react';
 
 const inter = Inter({ subsets: ['latin'] });
 
-export default function RootLayout({
-  children,
-}: {
-  children: React.ReactNode;
-}) {
+export default function RootLayout({ children }: PropsWithChildren) {
   return (
     <html lang="en" suppressHydrationWarning={true}>
       <body className={inter.className}>
@@ -20,10 +17,10 @@ export default function RootLayout({
           enableSystem={false}
           storageKey="options-theme"
         >
-          <WalletProvider>
+          <Web3Provider>
             {children}
             <Toaster />
-          </WalletProvider>
+          </Web3Provider>
         </ThemeProvider>
       </body>
     </html>
