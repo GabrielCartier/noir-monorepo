@@ -9,22 +9,27 @@ import type {
 import NodeCache from 'node-cache';
 import {
   http,
-  type Address,
   type Chain,
   type PrivateKeyAccount,
   type PublicClient,
   type WalletClient,
   createPublicClient,
   createWalletClient,
-  erc20Abi,
   formatUnits,
   getContract,
 } from 'viem';
 import { privateKeyToAccount } from 'viem/accounts';
 import { sonic } from 'viem/chains';
+import { mapSiloToSiloVaultData } from '../../../mappers/silo-mapper';
+import { MOCK_WALLET_BALANCE } from '../../../mock/wallet-balance';
+import { fetchSiloMarkets } from '../../../services/silo-service';
+import type { SiloVaultData } from '../../../types/common/silo-vault';
 import { SILO_ABI } from '../constants/silo-abi';
+import { SUPPORTED_TOKENS } from '../constants/supported-tokens';
 import type { PositionInfo } from '../types/position-info';
 import type { SonicPortfolio } from '../types/sonic-portfolio';
+import type { Token } from '../types/token';
+import type { TokenBalance } from '../types/token-balance';
 
 // TODO Should probably use WalletProvider from plugin-evm or make a reusable provider for the wallet stuff
 // as were going to reuse it for all the other plugins that will do wallet related stuff
@@ -97,6 +102,20 @@ export class SonicProvider {
       : accountOrPrivateKey;
   };
 
+  // TODO This should be dynamic and (maybe) use cache
+  async getWalletBalances(): Promise<TokenBalance[]> {
+    return MOCK_WALLET_BALANCE;
+  }
+  /***
+   * Token functions
+   */
+  // TODO This should be dynamic and use cache
+  async getSupportedTokens(): Promise<Token[]> {
+    return SUPPORTED_TOKENS;
+  }
+  /***
+   * Viem functions
+   */
   getPublicClient(): PublicClient {
     return createPublicClient({
       chain: this.chain,
@@ -116,42 +135,36 @@ export class SonicProvider {
     return http(this.chain.rpcUrls.custom.http[0]);
   };
 
-  private async getTokenInfo(
-    tokenAddress: Address,
-  ): Promise<{ symbol: string; decimals: number }> {
-    const tokenContract = getContract({
-      address: tokenAddress,
-      abi: erc20Abi,
-      client: this.getPublicClient(),
-    });
-    const [symbol, decimals] = await Promise.all([
-      tokenContract.read.symbol(),
-      tokenContract.read.decimals(),
-    ]);
-    return { symbol, decimals };
-  }
-
   /***
    * Silo functions
    */
+  async getSiloVaults(): Promise<SiloVaultData[]> {
+    const cacheKey = 'silo-vaults';
+    const cachedValue = await this.getCachedData<SiloVaultData[]>(cacheKey);
+
+    if (cachedValue) {
+      return cachedValue;
+    }
+    const siloVaults = await fetchSiloMarkets();
+    return mapSiloToSiloVaultData(siloVaults);
+  }
+
   async fetchPortfolioValue(): Promise<SonicPortfolio> {
     try {
       const cacheKey = `portfolio-${this.account.address}`;
       const cachedValue = await this.getCachedData<SonicPortfolio>(cacheKey);
 
       if (cachedValue) {
-        console.log('Cache hit for fetchPortfolioValue', cachedValue);
         return cachedValue;
       }
-      console.log('Cache miss for fetchPortfolioValue');
 
       // Get all Sonic positions for the user
       const positions: PositionInfo[] = [];
-      const siloAddresses = await this.getSiloAddresses();
+      const siloVaults = await this.getSiloVaults();
 
-      for (const siloAddress of siloAddresses) {
+      for (const siloVault of siloVaults) {
         const siloContract = getContract({
-          address: siloAddress,
+          address: siloVault.siloTokenAddress as `0x${string}`,
           abi: SILO_ABI,
           client: this.getPublicClient(),
         });
@@ -161,16 +174,14 @@ export class SonicProvider {
 
         if (shares > 0n) {
           const depositAmount = await siloContract.read.previewRedeem([shares]);
-          const { symbol, decimals } = await this.getTokenInfo(siloAddress);
-          const siloConfigAddress = await siloContract.read.siloConfig();
 
           positions.push({
-            siloConfigAddress,
-            siloAddress,
-            // FIXME Probably need to convert with decimals
+            siloConfigAddress: siloVault.configAddress as `0x${string}`,
+            siloAddress: siloVault.siloTokenAddress as `0x${string}`,
+            tokenAddress: siloVault.tokenAddress as `0x${string}`,
             depositAmount,
-            tokenSymbol: symbol,
-            tokenDecimals: decimals,
+            tokenSymbol: siloVault.symbol,
+            tokenDecimals: siloVault.decimals,
           });
         }
       }
@@ -184,18 +195,11 @@ export class SonicProvider {
       };
 
       this.setCachedData(cacheKey, portfolio);
-      console.log('Fetched portfolio:', portfolio);
       return portfolio;
     } catch (error) {
       console.error('Error fetching portfolio:', error);
       throw error;
     }
-  }
-
-  private async getSiloAddresses(): Promise<Address[]> {
-    // This is a placeholder - you'll need to implement the actual logic to get all Sonic silo addresses
-    // This could be from a configuration file, API, or contract registry
-    return [];
   }
 
   private async calculateTotalValueUsd(
@@ -206,35 +210,53 @@ export class SonicProvider {
     return 0;
   }
 
-  formatPortfolio(runtime: IAgentRuntime, portfolio: SonicPortfolio): string {
-    let output = `${runtime.character.name}\n`;
-    output += `Wallet Address: ${this.account.address}\n\n`;
-    output += 'Sonic Positions:\n';
+  formatPortfolio(portfolio: SonicPortfolio): string {
+    let output = '';
 
     for (const position of portfolio.positions) {
       const amount = formatUnits(
         position.depositAmount,
         position.tokenDecimals,
       );
-      output += `- ${amount} ${position.tokenSymbol} in Silo ${position.siloAddress.slice(0, 6)}...${position.siloAddress.slice(-4)}\n`;
+      output += `- ${amount} ${position.tokenSymbol} in Silo ${position.siloAddress}\n`;
     }
 
-    // TODO Fix the formatting
     output += `\nTotal Value: $${portfolio.totalValueUsd}`;
 
     return output;
   }
 
-  async getFormattedPortfolio(runtime: IAgentRuntime): Promise<string> {
+  async getFormattedPortfolio(): Promise<string> {
     try {
       const portfolio = await this.fetchPortfolioValue();
-      return this.formatPortfolio(runtime, portfolio);
+      return this.formatPortfolio(portfolio);
     } catch (error) {
       console.error('Error generating portfolio report:', error);
       return 'Unable to fetch Sonic positions. Please try again later.';
     }
   }
 }
+
+const formatSonicContext = async (runtime: IAgentRuntime) => {
+  const sonicProvider = initSonicProvider(runtime);
+  const portfolio = await sonicProvider.getFormattedPortfolio();
+  const walletBalances = await sonicProvider.getWalletBalances();
+  const supportedTokens = await sonicProvider.getSupportedTokens();
+  const siloVaults = await sonicProvider.getSiloVaults();
+  return `
+walletBalances:
+${walletBalances.map((c) => `- ${c}`).join('\n')}
+
+supportedTokens:
+${supportedTokens.map((c) => `- ${c}`).join('\n')}
+
+siloVaults:
+${siloVaults.map((c) => `- ${c}`).join('\n')}
+
+userPortfolio:
+${portfolio}
+`.trim();
+};
 
 export const initSonicProvider = (runtime: IAgentRuntime) => {
   const baseChain = sonic;
@@ -261,8 +283,7 @@ const sonicProvider: Provider = {
     _state?: State,
   ): Promise<string | null> => {
     try {
-      const sonicProvider = initSonicProvider(runtime);
-      return await sonicProvider.getFormattedPortfolio(runtime);
+      return await formatSonicContext(runtime);
     } catch (error) {
       console.error('Error in Sonic provider:', error);
       return null;

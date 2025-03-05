@@ -116,7 +116,7 @@ export const depositAction: Action = {
   },
   handler: async (
     runtime: IAgentRuntime,
-    _message: Memory,
+    message: Memory,
     state?: State,
     _options?: {
       [key: string]: unknown;
@@ -124,16 +124,13 @@ export const depositAction: Action = {
     callback?: HandlerCallback,
   ) => {
     elizaLogger.log('Silo Deposit action handler called');
-    if (!state) {
-      if (callback) {
-        callback({ text: 'Error please try again' });
-      }
-      return false;
-    }
+    const currentState = state
+      ? await runtime.updateRecentMessageState(state)
+      : await runtime.composeState(message);
 
     const sonicProvider = await initSonicProvider(runtime);
     const context = composeContext({
-      state,
+      state: currentState,
       template: SILO_DEPOSIT_TEMPLATE,
     });
     elizaLogger.log(`Silo deposit context is ${JSON.stringify(context)}`);

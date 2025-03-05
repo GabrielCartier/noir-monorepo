@@ -5,6 +5,7 @@ export const depositContentSchema = z.object({
   amount: z.number().positive(),
   siloAddress: ethereumAddressSchema,
   userAddress: ethereumAddressSchema,
+  tokenAddress: ethereumAddressSchema,
   siloConfigAddress: ethereumAddressSchema,
 });
 

@@ -9,6 +9,7 @@ export interface BaseParams {
   agentAddress: Address;
 }
 export interface DepositParams extends BaseParams {
+  tokenAddress: Address;
   amount: number;
 }
 

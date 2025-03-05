@@ -38,10 +38,10 @@ export interface SiloAsset {
   solvencyOracle: SiloOracle;
   maxLtvOracle: SiloOracle;
   collateralBaseApr: string;
-  collateralPrograms: any[];
-  protectedPrograms: any[];
+  collateralPrograms: unknown[];
+  protectedPrograms: unknown[];
   debtBaseApr: string;
-  debtPrograms: any[];
+  debtPrograms: unknown[];
   liquidity: string;
   tvl: string;
   isNonBorrowable: boolean;
@@ -50,6 +50,10 @@ export interface SiloAsset {
   debtPoints: SiloBasePointsTag[];
   oracleLabel: string;
   oracleContentKey: string | null;
+}
+
+export interface ExtendedSiloAsset extends SiloAsset {
+  siloTokenAddress: string;
 }
 
 export interface SiloMarket {
@@ -62,4 +66,15 @@ export interface SiloMarket {
   silo1: SiloAsset;
 }
 
+export interface ExtendedSiloMarket {
+  protocolKey: string;
+  id: string;
+  isVerified: boolean;
+  configAddress: string;
+  boostedContentKey: string | null;
+  silo0: ExtendedSiloAsset;
+  silo1: ExtendedSiloAsset;
+}
+
 export type SiloMarketsResponse = SiloMarket[];
+export type ExtendedSiloMarketsResponse = ExtendedSiloMarket[];

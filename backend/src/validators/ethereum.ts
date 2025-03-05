@@ -7,7 +7,7 @@ import { z } from 'zod';
 export const ethereumAddressSchema = z
   .string()
   .refine((value) => isAddress(value), {
-    message: 'Invalid Ethereum address format',
+    message: 'Invalid address format',
   });
 
 /**

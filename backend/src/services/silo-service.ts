@@ -1,10 +1,16 @@
 import { elizaLogger } from '@elizaos/core';
-import type { SiloMarketsResponse } from '../types/response/silo';
+import {} from 'viem';
+import { viemPublicClient } from '../config/viem-public-client';
+import { SILO_CONFIG_ABI } from '../constants/silo-config-abi';
+import type {
+  ExtendedSiloMarketsResponse,
+  SiloMarketsResponse,
+} from '../types/response/silo';
 
 /**
- * Fetches market data from Silo Finance API
+ * Fetches market data from Silo Finance API and enriches it with silo token addresses
  */
-export async function fetchSiloMarkets(): Promise<SiloMarketsResponse> {
+export async function fetchSiloMarkets(): Promise<ExtendedSiloMarketsResponse> {
   try {
     elizaLogger.info('[SiloService] Fetching Silo markets data');
 
@@ -38,9 +44,40 @@ export async function fetchSiloMarkets(): Promise<SiloMarketsResponse> {
     elizaLogger.info(
       `[SiloService] Successfully fetched Silo markets: ${data.length} markets found`,
     );
-    return data;
+
+    // Create a Viem public client for reading contract data
+    const publicClient = viemPublicClient;
+
+    // Enrich market data with silo token addresses
+    const enrichedMarkets: ExtendedSiloMarketsResponse = await Promise.all(
+      data.map(async (market) => {
+        const config = await publicClient.readContract({
+          address: market.configAddress as `0x${string}`,
+          abi: SILO_CONFIG_ABI,
+          functionName: 'getSilos',
+        });
+
+        const [silo0Address, silo1Address] = config;
+
+        return {
+          ...market,
+          silo0: {
+            ...market.silo0,
+            siloTokenAddress: silo0Address,
+          },
+          silo1: {
+            ...market.silo1,
+            siloTokenAddress: silo1Address,
+          },
+        };
+      }),
+    );
+
+    elizaLogger.info(
+      '[SiloService] Successfully enriched markets with silo token addresses',
+    );
+    return enrichedMarkets;
   } catch (error) {
-    console.log('error', error);
     elizaLogger.error('[SiloService] Error fetching Silo markets:', error);
     throw error;
   }
