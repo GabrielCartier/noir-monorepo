@@ -1,9 +1,10 @@
 // FIXME Need to add the user address to the template
-export const SILO_DEPOSIT_TEMPLATE = `Given the message, check if the token is in the supported tokens list. Then check if there is a silo
+export const SILO_DEPOSIT_TEMPLATE = `Given the last message from the user and only that message, check if the token is in the supported tokens list. Then check if there is a silo
 vault that supports the token. For this you need to check go through the list of silo vaults and check if the token exist. Finally, you
 need to check if the user has enough balance in their wallet to deposit the amount requested.
 The user will provide the amount to deposit and the token (name, symbol or address).
 
+{{recentMessages}}
 {{walletInfo}}
 {{supportedTokens}}
 {{siloVaults}}
