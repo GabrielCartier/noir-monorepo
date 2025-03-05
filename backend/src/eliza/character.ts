@@ -1,8 +1,12 @@
 import { type Character, ModelProviderName, type Plugin } from '@elizaos/core';
 import { evmPlugin } from '@elizaos/plugin-evm';
+import { sonicPlugin } from '../plugins/plugin-sonic';
 
-// Type assertion to handle plugin version mismatch
-const typedEvmPlugin = evmPlugin as unknown as Plugin;
+// Use type assertion to handle plugin version mismatch
+const plugins = [
+  evmPlugin as unknown as Plugin,
+  sonicPlugin as unknown as Plugin,
+];
 
 // Note: There are type mismatches between different versions of @elizaos/core
 // in the dependencies. This is a known issue that needs to be resolved by:
@@ -15,7 +19,7 @@ export const character: Character = {
   name: 'OptimalAI',
   username: 'optimalai',
   modelProvider: ModelProviderName.OPENAI,
-  plugins: [typedEvmPlugin],
+  plugins,
   settings: {
     secrets: {},
     chains: {

@@ -6,43 +6,49 @@ import type {
   Provider,
   State,
 } from '@elizaos/core';
-import BigNumber from 'bignumber.js';
-import { Contract, type providers } from 'ethers';
 import NodeCache from 'node-cache';
-import { ERC20_ABI, SILO_ABI } from '../../../services/silo/abis';
-import { parseAccount } from '../utils';
+import {
+  http,
+  type Address,
+  type Chain,
+  type PrivateKeyAccount,
+  type PublicClient,
+  type WalletClient,
+  createPublicClient,
+  createWalletClient,
+  erc20Abi,
+  formatUnits,
+  getContract,
+} from 'viem';
+import { privateKeyToAccount } from 'viem/accounts';
+import { sonic } from 'viem/chains';
+import { SILO_ABI } from '../constants/silo-abi';
+import type { PositionInfo } from '../types/position-info';
+import type { SonicPortfolio } from '../types/sonic-portfolio';
 
-interface PositionInfo {
-  tokenAddress: string;
-  siloAddress: string;
-  depositAmount: string;
-  tokenSymbol: string;
-  tokenDecimals: number;
-}
-
-interface SonicPortfolio {
-  positions: PositionInfo[];
-  totalValueUsd: string;
-}
-
+// TODO Should probably use WalletProvider from plugin-evm or make a reusable provider for the wallet stuff
+// as were going to reuse it for all the other plugins that will do wallet related stuff
 export class SonicProvider {
   private readonly cache: NodeCache;
   private readonly cacheKey = 'sonic/portfolio';
-  private readonly provider: providers.JsonRpcProvider;
-  private readonly address: string;
   private readonly cacheManager: ICacheManager;
+  account: PrivateKeyAccount;
+  readonly chain: Chain = sonic;
 
   constructor(
-    provider: providers.JsonRpcProvider,
-    address: string,
+    accountOrPrivateKey: PrivateKeyAccount | `0x${string}`,
     cacheManager: ICacheManager,
+    chain: Chain,
   ) {
-    this.provider = provider;
-    this.address = address;
+    this.account = this.createAccount(accountOrPrivateKey);
     this.cacheManager = cacheManager;
     this.cache = new NodeCache({ stdTTL: 300 }); // Cache TTL set to 5 minutes
+    this.chain = chain;
   }
 
+  /***
+   * Cache functions
+   */
   private async readFromCache<T>(key: string): Promise<T | null> {
     const cached = await this.cacheManager.get<T>(join(this.cacheKey, key));
     return cached ?? null;
@@ -80,20 +86,57 @@ export class SonicProvider {
     await this.writeToCache(cacheKey, data);
   }
 
+  /***
+   * Wallet functions
+   */
+  private createAccount = (
+    accountOrPrivateKey: PrivateKeyAccount | `0x${string}`,
+  ) => {
+    return typeof accountOrPrivateKey === 'string'
+      ? privateKeyToAccount(accountOrPrivateKey)
+      : accountOrPrivateKey;
+  };
+
+  getPublicClient(): PublicClient {
+    return createPublicClient({
+      chain: this.chain,
+      transport: this.createHttpTransport(),
+    });
+  }
+
+  getWalletClient(): WalletClient {
+    return createWalletClient({
+      chain: this.chain,
+      transport: this.createHttpTransport(),
+      account: this.account,
+    });
+  }
+
+  private createHttpTransport = () => {
+    return http(this.chain.rpcUrls.custom.http[0]);
+  };
+
   private async getTokenInfo(
-    tokenAddress: string,
+    tokenAddress: Address,
   ): Promise<{ symbol: string; decimals: number }> {
-    const tokenContract = new Contract(tokenAddress, ERC20_ABI, this.provider);
+    const tokenContract = getContract({
+      address: tokenAddress,
+      abi: erc20Abi,
+      client: this.getPublicClient(),
+    });
     const [symbol, decimals] = await Promise.all([
-      tokenContract.symbol(),
-      tokenContract.decimals(),
+      tokenContract.read.symbol(),
+      tokenContract.read.decimals(),
     ]);
     return { symbol, decimals };
   }
 
+  /***
+   * Silo functions
+   */
   async fetchPortfolioValue(): Promise<SonicPortfolio> {
     try {
-      const cacheKey = `portfolio-${this.address}`;
+      const cacheKey = `portfolio-${this.account.address}`;
       const cachedValue = await this.getCachedData<SonicPortfolio>(cacheKey);
 
       if (cachedValue) {
@@ -107,18 +150,25 @@ export class SonicProvider {
       const siloAddresses = await this.getSiloAddresses();
 
       for (const siloAddress of siloAddresses) {
-        const siloContract = new Contract(siloAddress, SILO_ABI, this.provider);
-        const tokenAddress = await siloContract.asset();
-        const shares = await siloContract.balanceOf(this.address);
+        const siloContract = getContract({
+          address: siloAddress,
+          abi: SILO_ABI,
+          client: this.getPublicClient(),
+        });
+        const shares = await siloContract.read.balanceOf([
+          this.account.address,
+        ]);
 
-        if (shares.gt(0)) {
-          const depositAmount = await siloContract.previewRedeem(shares);
-          const { symbol, decimals } = await this.getTokenInfo(tokenAddress);
+        if (shares > 0n) {
+          const depositAmount = await siloContract.read.previewRedeem([shares]);
+          const { symbol, decimals } = await this.getTokenInfo(siloAddress);
+          const siloConfigAddress = await siloContract.read.siloConfig();
 
           positions.push({
-            tokenAddress,
+            siloConfigAddress,
             siloAddress,
-            depositAmount: depositAmount.toString(),
+            // FIXME Probably need to convert with decimals
+            depositAmount,
             tokenSymbol: symbol,
             tokenDecimals: decimals,
           });
@@ -142,7 +192,7 @@ export class SonicProvider {
     }
   }
 
-  private async getSiloAddresses(): Promise<string[]> {
+  private async getSiloAddresses(): Promise<Address[]> {
     // This is a placeholder - you'll need to implement the actual logic to get all Sonic silo addresses
     // This could be from a configuration file, API, or contract registry
     return [];
@@ -150,26 +200,27 @@ export class SonicProvider {
 
   private async calculateTotalValueUsd(
     positions: PositionInfo[],
-  ): Promise<string> {
+  ): Promise<number> {
     // This is a placeholder - you'll need to implement the actual logic to calculate total value in USD
     // This could involve fetching token prices from an oracle or DEX
-    return '0';
+    return 0;
   }
 
   formatPortfolio(runtime: IAgentRuntime, portfolio: SonicPortfolio): string {
     let output = `${runtime.character.name}\n`;
-    output += `Wallet Address: ${this.address}\n\n`;
+    output += `Wallet Address: ${this.account.address}\n\n`;
     output += 'Sonic Positions:\n';
 
     for (const position of portfolio.positions) {
-      const amount = new BigNumber(position.depositAmount)
-        .div(10 ** position.tokenDecimals)
-        .toFixed(4);
+      const amount = formatUnits(
+        position.depositAmount,
+        position.tokenDecimals,
+      );
       output += `- ${amount} ${position.tokenSymbol} in Silo ${position.siloAddress.slice(0, 6)}...${position.siloAddress.slice(-4)}\n`;
     }
 
-    const totalValueUsd = new BigNumber(portfolio.totalValueUsd).toFixed(2);
-    output += `\nTotal Value: $${totalValueUsd}`;
+    // TODO Fix the formatting
+    output += `\nTotal Value: $${portfolio.totalValueUsd}`;
 
     return output;
   }
@@ -185,22 +236,32 @@ export class SonicProvider {
   }
 }
 
+export const initSonicProvider = (runtime: IAgentRuntime) => {
+  const baseChain = sonic;
+  const rpcUrl = runtime.getSetting('SONIC_RPC_URL');
+  if (!rpcUrl) {
+    throw new Error('SONIC_RPC_URL is missing');
+  }
+  const sonicChain = {
+    ...baseChain,
+    rpcUrls: { ...baseChain.rpcUrls, custom: { http: [rpcUrl] } },
+  };
+
+  const privateKey = runtime.getSetting('SONIC_PRIVATE_KEY') as `0x${string}`;
+  if (!privateKey) {
+    throw new Error('SONIC_PRIVATE_KEY is missing');
+  }
+  return new SonicProvider(privateKey, runtime.cacheManager, sonicChain);
+};
+
 const sonicProvider: Provider = {
   get: async (
     runtime: IAgentRuntime,
     _message: Memory,
     _state?: State,
   ): Promise<string | null> => {
-    const account = parseAccount(runtime);
-
     try {
-      const provider = runtime
-        .providers[0] as unknown as providers.JsonRpcProvider;
-      const sonicProvider = new SonicProvider(
-        provider,
-        account.address,
-        runtime.cacheManager,
-      );
+      const sonicProvider = initSonicProvider(runtime);
       return await sonicProvider.getFormattedPortfolio(runtime);
     } catch (error) {
       console.error('Error in Sonic provider:', error);
