@@ -48,12 +48,6 @@ export function createAgent(
   cache: ICacheManager,
   token: string,
 ) {
-  elizaLogger.success(
-    elizaLogger.successesTitle,
-    'Creating runtime for character',
-    character.name,
-  );
-
   // Use type assertion to handle plugin version mismatch
   const plugins = [
     evmPlugin as unknown as Plugin,
@@ -78,21 +72,17 @@ export function createAgent(
 async function startAgent(character: Character, directClient: ApiClient) {
   let db: (IDatabaseAdapter & IDatabaseCacheAdapter) | undefined;
   try {
-    elizaLogger.info(`[Agent] Starting agent for character: ${character.name}`);
+    elizaLogger.info(`Starting agent for character: ${character.name}`);
     character.id ??= stringToUuid(character.name);
     character.username ??= character.name;
 
     const token = getTokenForProvider(character.modelProvider, character);
     if (!token) {
       elizaLogger.error(
-        `[Agent] No token found for provider ${character.modelProvider}`,
+        `No token found for provider ${character.modelProvider}`,
       );
       throw new Error(`No token found for provider ${character.modelProvider}`);
     }
-    elizaLogger.info(
-      `[Agent] Got token for provider ${character.modelProvider}`,
-    );
-
     db = await initializeDatabase();
     const cache = initializeDbCache(character, db);
 
@@ -106,11 +96,11 @@ async function startAgent(character: Character, directClient: ApiClient) {
     return runtime;
   } catch (error) {
     elizaLogger.error(
-      `[Agent] Error starting agent for character ${character.name}:`,
+      `Error starting agent for character ${character.name}:`,
       error,
     );
     if (db) {
-      elizaLogger.info('[Agent] Closing database connection due to error');
+      elizaLogger.info('Closing database connection due to error');
       await db.close();
     }
     throw error;
@@ -118,7 +108,7 @@ async function startAgent(character: Character, directClient: ApiClient) {
 }
 
 export const startAgents = async () => {
-  elizaLogger.info('[StartAgents] Starting agents initialization');
+  elizaLogger.info('Starting agents initialization');
   const directClient = new ApiClient();
   configureApiRoutes(directClient.app);
   const serverPort = Number.parseInt(settings.SERVER_PORT || '3000');
@@ -136,7 +126,7 @@ export const startAgents = async () => {
       await startAgent(character, directClient as ApiClient);
     }
   } catch (error) {
-    elizaLogger.error('[StartAgents] Error starting agents:', error);
+    elizaLogger.error('Error starting agents:', error);
     throw error;
   }
 
@@ -146,13 +136,11 @@ export const startAgents = async () => {
   };
 
   directClient.start(serverPort);
-  elizaLogger.info(
-    `[StartAgents] Server started successfully on port ${serverPort}`,
-  );
+  elizaLogger.info(`Server started successfully on port ${serverPort}`);
 
   const isDaemonProcess = process.env.DAEMON_PROCESS === 'true';
   if (!isDaemonProcess) {
-    elizaLogger.info("[StartAgents] Chat started. Type 'exit' to quit.");
+    elizaLogger.info("Chat started. Type 'exit' to quit.");
     const chat = startChat(characters);
     chat();
   }
@@ -160,42 +148,41 @@ export const startAgents = async () => {
   // Handle graceful shutdown
   let isShuttingDown = false;
   const shutdown = async () => {
-    elizaLogger.info('[Shutdown] Shutdown handler triggered');
-    elizaLogger.debug('[Shutdown] Stack trace:', new Error().stack);
+    elizaLogger.info('Shutdown handler triggered');
+    elizaLogger.debug('Stack trace:', new Error().stack);
 
     if (isShuttingDown) {
-      elizaLogger.info('[Shutdown] Already shutting down, skipping...');
+      elizaLogger.info('Already shutting down, skipping...');
       return;
     }
 
     isShuttingDown = true;
-    elizaLogger.info('[Shutdown] Starting graceful shutdown...');
+    elizaLogger.info('Starting graceful shutdown...');
 
     try {
       // Close any running servers first
       if (directClient.server) {
-        elizaLogger.info('[Shutdown] Closing server...');
+        elizaLogger.info('Closing server...');
         // @ts-ignore - Elysia's server type doesn't include close method, but it exists at runtime
         await directClient.server.close();
-        elizaLogger.info('[Shutdown] Server closed successfully');
+        elizaLogger.info('Server closed successfully');
       }
 
       // Then close database connection
       if (postgresAdapter) {
-        elizaLogger.info('[Shutdown] Closing database connection...');
+        elizaLogger.info('Closing database connection...');
         await postgresAdapter.close();
-        elizaLogger.info('[Shutdown] Database connection closed successfully');
+        elizaLogger.info('Database connection closed successfully');
       }
 
       process.exit(0);
     } catch (error) {
-      elizaLogger.error('[Shutdown] Error during shutdown:', error);
+      elizaLogger.error('Error during shutdown:', error);
       process.exit(1);
     }
   };
 
   // Handle different shutdown signals - remove any existing handlers first
-  elizaLogger.info('[Shutdown] Setting up shutdown handlers...');
   process.removeListener('SIGINT', shutdown);
   process.removeListener('SIGTERM', shutdown);
   process.on('SIGINT', shutdown);
