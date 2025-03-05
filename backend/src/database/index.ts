@@ -1,6 +1,6 @@
-import { PostgresDatabaseAdapter } from '@elizaos/adapter-postgres';
 import type { Goal, Memory, UUID } from '@elizaos/core';
 import { elizaLogger } from '@elizaos/core';
+import { PostgresDatabaseAdapter } from '../plugins/adapter-postgres';
 
 export class ExtendedPostgresDatabaseAdapter extends PostgresDatabaseAdapter {
   private isInitialized = false;
@@ -131,6 +131,19 @@ export class ExtendedPostgresDatabaseAdapter extends PostgresDatabaseAdapter {
       start: startDate ? new Date(startDate).getTime() : undefined,
       end: endDate ? new Date(endDate).getTime() : undefined,
     });
+  }
+
+  async getMemoriesByIds(ids: UUID[], tableName: string): Promise<Memory[]> {
+    try {
+      const result = await this.query(
+        `SELECT * FROM ${tableName} WHERE id = ANY($1) ORDER BY created_at DESC`,
+        [ids],
+      );
+      return result.rows;
+    } catch (error) {
+      elizaLogger.error('Error getting memories by IDs:', error);
+      return [];
+    }
   }
 }
 

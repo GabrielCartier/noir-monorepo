@@ -14,5 +14,8 @@
   },
   "engines": {
     "node": ">=22"
+  },
+  "dependencies": {
+    "ethers": "5.7.2"
   }
 }

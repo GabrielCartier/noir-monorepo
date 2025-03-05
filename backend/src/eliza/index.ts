@@ -1,4 +1,3 @@
-import { PostgresDatabaseAdapter } from '@elizaos/adapter-postgres';
 import {
   AgentRuntime,
   type Character,
@@ -19,6 +18,8 @@ import {
   loadCharacters,
   parseArguments,
 } from '../config/index';
+import { PostgresDatabaseAdapter } from '../plugins/adapter-postgres';
+import { sonicPlugin } from '../plugins/plugin-sonic';
 import { ApiClient } from './api';
 import { character } from './character';
 
@@ -54,7 +55,10 @@ export function createAgent(
   );
 
   // Use type assertion to handle plugin version mismatch
-  const plugins = [evmPlugin as unknown as Plugin];
+  const plugins = [
+    evmPlugin as unknown as Plugin,
+    sonicPlugin as unknown as Plugin,
+  ];
 
   return new AgentRuntime({
     databaseAdapter: db,
