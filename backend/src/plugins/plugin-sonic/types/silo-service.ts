@@ -5,7 +5,7 @@ export interface BaseParams {
   publicClient: PublicClient;
   walletClient: WalletClient;
   siloAddress: Address;
-  userAddress: Address;
+  vaultAddress: Address;
   agentAddress: Address;
 }
 export interface DepositParams extends BaseParams {

@@ -10,6 +10,7 @@ import {
   generateObject,
 } from '@elizaos/core';
 import { erc20Abi, parseUnits } from 'viem';
+import { Vault } from '../constants';
 import { SILO_ABI } from '../constants/silo-abi';
 import { initSonicProvider } from '../providers/sonic';
 import { SILO_DEPOSIT_TEMPLATE } from '../templates/silo-deposit-template';
@@ -17,25 +18,27 @@ import type { DepositParams } from '../types/silo-service';
 import type { DepositContent } from '../validators/deposit';
 import { depositContentSchema } from '../validators/deposit';
 
-// TODO This is not used, we should use the response from the action
-interface DepositResponse {
-  success: boolean;
-  response: string;
-  transactionHash?: string;
-}
-
-// FIXME The params are not correct here, we need to use different addresses
-// I believe ideally we have an account abstracted wallet for the user that the agent can
-// control
 async function deposit(params: DepositParams) {
   const {
     walletClient,
     publicClient,
     siloAddress,
     agentAddress,
-    userAddress,
+    vaultAddress,
     amount,
   } = params;
+
+  // First check if the agent has authorization over the vault
+  const isWhitelisted = await publicClient.readContract({
+    address: vaultAddress,
+    abi: Vault.abi,
+    functionName: 'isWhitelisted',
+    args: [agentAddress],
+  });
+
+  if (!isWhitelisted) {
+    throw new Error('Agent is not whitelisted to operate this vault');
+  }
 
   const decimals = await publicClient.readContract({
     address: siloAddress,
@@ -45,8 +48,9 @@ async function deposit(params: DepositParams) {
 
   const bigIntAmount = parseUnits(amount.toString(), decimals);
 
+  // Approve from the vault address
   const { request } = await publicClient.simulateContract({
-    account: userAddress,
+    account: vaultAddress,
     address: siloAddress,
     abi: erc20Abi,
     functionName: 'approve',
@@ -56,12 +60,13 @@ async function deposit(params: DepositParams) {
   const hash = await walletClient.writeContract(request);
   await publicClient.waitForTransactionReceipt({ hash });
 
+  // Deposit from the vault address
   const { request: depositRequest } = await publicClient.simulateContract({
-    account: userAddress,
+    account: vaultAddress,
     address: siloAddress,
     abi: SILO_ABI,
     functionName: 'deposit',
-    args: [bigIntAmount, userAddress],
+    args: [bigIntAmount, vaultAddress],
   });
 
   const depositHash = await walletClient.writeContract(depositRequest);
@@ -168,9 +173,17 @@ export const depositAction: Action = {
       }
       return true;
     } catch (error) {
-      elizaLogger.error('Error in swap handler:', error.message);
+      console.error(
+        'Error in silo deposit:',
+        error instanceof Error ? error.message : 'Unknown error',
+      );
       if (callback) {
-        callback({ text: `Error: ${error.message}` });
+        callback({
+          text:
+            error instanceof Error
+              ? error.message
+              : 'Failed to deposit to silo',
+        });
       }
       return false;
     }

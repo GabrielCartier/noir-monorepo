@@ -34,11 +34,6 @@ About {{agentName}}:
 
 {{providers}}
 
-{{attachments}}
-
-# Capabilities
-Note that {{agentName}} is capable of reading/seeing/hearing various forms of media, including images, videos, audio, plaintext and PDFs. Recent attachments have been included above under the "Attachments" section.
-
 {{messageDirections}}
 
 {{recentMessages}}
@@ -82,11 +77,12 @@ Response format should be formatted in a JSON block like this:
 
 interface MessageRequest {
   roomId?: string;
-  userId?: string;
+  userId: string;
   userName?: string;
   name?: string;
   text?: string;
   agentId?: string;
+  walletAddress?: string;
 }
 
 export class ApiClient {
@@ -211,7 +207,7 @@ export class ApiClient {
       elizaLogger.info('[ApiClient] Starting message handling');
       const { agentId } = request;
       const roomId = stringToUuid(request.roomId ?? `default-room-${agentId}`);
-      const userId = stringToUuid(request.userId ?? 'user');
+      const userId = stringToUuid(request.userId);
 
       await agent.ensureConnection(
         userId,
@@ -233,6 +229,9 @@ export class ApiClient {
         attachments: [],
         source: 'direct',
         inReplyTo: undefined,
+        metadata: {
+          walletAddress: request.walletAddress,
+        },
       };
       const userMessage = {
         content,
