@@ -1,5 +1,5 @@
 import type { Plugin } from '@elizaos/core';
-import { createVaultAction } from './actions/create-vault-test';
+import { createVaultAction } from './actions/create-vault';
 import { depositAction } from './actions/silo-deposit';
 import { sonicProvider } from './providers/sonic';
 

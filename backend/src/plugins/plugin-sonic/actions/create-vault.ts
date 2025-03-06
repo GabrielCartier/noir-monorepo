@@ -6,7 +6,6 @@ import {
   type RAGKnowledgeItem,
   type State,
   type UUID,
-  composeContext,
   elizaLogger,
 } from '@elizaos/core';
 import { v4 as uuidv4 } from 'uuid';
@@ -14,7 +13,8 @@ import { http, createPublicClient, createWalletClient } from 'viem';
 import { privateKeyToAccount } from 'viem/accounts';
 import { sonic } from 'viem/chains';
 import { z } from 'zod';
-import { VaultFactory } from '../contracts/create-vault/VaultFactory';
+import VaultFactoryArtifact from '../../../../../contracts/artifacts/src/contracts/create-vault/VaultFactory.sol/VaultFactory.json';
+import { env } from '../../../config/env';
 
 interface MessageMetadata {
   walletAddress?: string;
@@ -53,29 +53,21 @@ async function createVault(
     // Initialize Viem clients
     const publicClient = createPublicClient({
       chain: sonic,
-      transport: http(),
+      transport: http('https://rpc.soniclabs.com'),
     });
 
-    // Create wallet client with private key (should be stored securely)
-    const account = privateKeyToAccount(
-      process.env.VAULT_CREATOR_PRIVATE_KEY as `0x${string}`,
-    );
+    // Create wallet client with private key
+    const account = privateKeyToAccount(env.EVM_PRIVATE_KEY);
     const walletClient = createWalletClient({
       account,
       chain: sonic,
-      transport: http(),
+      transport: http('https://rpc.soniclabs.com'),
     });
 
-    // Deploy VaultFactory if not already deployed
-    const factoryAddress = process.env.VAULT_FACTORY_ADDRESS as `0x${string}`;
-    if (!factoryAddress) {
-      throw new Error('VAULT_FACTORY_ADDRESS not configured');
-    }
-
     // Create vault through factory
-    const { request } = await publicClient.simulateContract({
-      address: factoryAddress,
-      abi: VaultFactory.abi,
+    const hash = await walletClient.writeContract({
+      address: env.VAULT_FACTORY_ADDRESS,
+      abi: VaultFactoryArtifact.abi,
       functionName: 'createVault',
       args: [
         tokenAddress as `0x${string}`,
@@ -83,18 +75,30 @@ async function createVault(
         vaultDescription || 'AI-managed vault for Sonic users',
         'SONIC_VAULT',
       ],
-      account: account.address,
     });
 
-    // Send transaction
-    const hash = await walletClient.writeContract(request);
     const receipt = await publicClient.waitForTransactionReceipt({ hash });
 
-    if (!receipt.contractAddress) {
-      throw new Error('Failed to get vault address from transaction receipt');
+    // Log the transaction receipt for debugging
+    elizaLogger.info('Transaction receipt:', {
+      logs: receipt.logs,
+      status: receipt.status,
+      contractAddress: receipt.contractAddress,
+    });
+
+    // Look for the VaultCreated event in the transaction receipt
+    const vaultCreatedEvent = receipt.logs.find(
+      (log) =>
+        log.topics[0] ===
+        '0x897c133dfbfe1f6239e98b4ffd7e4f6c86a62350a131a7a37790419f58af02f9',
+    );
+
+    if (!vaultCreatedEvent) {
+      throw new Error('VaultCreated event not found in transaction receipt');
     }
 
-    const vaultAddress = receipt.contractAddress;
+    // The vault address is the first indexed parameter in the event
+    const vaultAddress = vaultCreatedEvent.topics[1] as `0x${string}`;
 
     // Create knowledge about the vault with Sonic-specific information
     const vaultKnowledge: RAGKnowledgeItem = {
@@ -176,27 +180,19 @@ export const createVaultAction: Action = {
       },
     ],
   ],
-  validate: async (runtime: IAgentRuntime) => {
+  validate: async (_runtime: IAgentRuntime) => {
     return true;
   },
   handler: async (
     runtime: IAgentRuntime,
     message: Memory,
-    state?: State,
+    _state?: State,
     _options?: {
       [key: string]: unknown;
     },
     callback?: HandlerCallback,
   ) => {
     elizaLogger.log('Create Vault handler called');
-    const currentState = state
-      ? await runtime.updateRecentMessageState(state)
-      : await runtime.composeState(message);
-
-    const context = composeContext({
-      state: currentState,
-      template: 'Create a new vault for the user',
-    });
 
     // Extract wallet address from message metadata
     const metadata = message.content.metadata as MessageMetadata;
@@ -217,7 +213,7 @@ export const createVaultAction: Action = {
       walletAddress,
       tokenAddress:
         process.env.DEFAULT_TOKEN_ADDRESS ||
-        '0x0000000000000000000000000000000000000000',
+        '0x039e2fB66102314Ce7b64Ce5Ce3E5183bc94aD38', // Sonic (S) token address
       vaultName: 'My Sonic Vault',
       vaultDescription: 'AI-managed vault for Sonic users',
     };

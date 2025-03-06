@@ -4,7 +4,7 @@ import { ethereumAddressSchema } from '../../../validators/ethereum';
 export const depositContentSchema = z.object({
   amount: z.number().positive(),
   siloAddress: ethereumAddressSchema,
-  userAddress: ethereumAddressSchema,
+  vaultAddress: ethereumAddressSchema,
   tokenAddress: ethereumAddressSchema,
   siloConfigAddress: ethereumAddressSchema,
 });

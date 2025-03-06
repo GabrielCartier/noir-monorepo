@@ -203,7 +203,7 @@ export class SonicProvider {
   }
 
   private async calculateTotalValueUsd(
-    positions: PositionInfo[],
+    _positions: PositionInfo[],
   ): Promise<number> {
     // This is a placeholder - you'll need to implement the actual logic to calculate total value in USD
     // This could involve fetching token prices from an oracle or DEX
@@ -239,22 +239,79 @@ export class SonicProvider {
 
 const formatSonicContext = async (runtime: IAgentRuntime) => {
   const sonicProvider = initSonicProvider(runtime);
-  const portfolio = await sonicProvider.getFormattedPortfolio();
   const walletBalances = await sonicProvider.getWalletBalances();
   const supportedTokens = await sonicProvider.getSupportedTokens();
   const siloVaults = await sonicProvider.getSiloVaults();
+
+  // Get user-specific knowledge filtered by wallet address
+  const userKnowledge = await runtime.databaseAdapter.getKnowledge({
+    agentId: runtime.agentId,
+    limit: 10, // Limit to most recent 10 items
+    query: `content->'metadata'->>'walletAddress' = '${sonicProvider.account.address}' AND content->'metadata'->>'type' = 'vault_info'`,
+  });
+
+  // Format vault-related knowledge
+  const userVaults = userKnowledge.map((item) => ({
+    vaultAddress: item.content.metadata?.vaultAddress,
+    walletAddress: item.content.metadata?.walletAddress,
+  }));
+
+  // Format wallet info
+  const walletInfo = walletBalances
+    .map((balance) => {
+      const token = supportedTokens.find(
+        (t) => t.address.toLowerCase() === balance.address.toLowerCase(),
+      );
+      return `- Token: ${token?.symbol || 'Unknown'}
+  Balance: ${balance.balance}
+  Address: ${balance.address}`;
+    })
+    .join('\n');
+
+  // Format supported tokens
+  const supportedTokensList = supportedTokens
+    .map(
+      (token) =>
+        `- Name: ${token.name}
+  Symbol: ${token.symbol}
+  Address: ${token.address}
+  Decimals: ${token.decimals}`,
+    )
+    .join('\n');
+
+  // Format silo vaults
+  const siloVaultsList = siloVaults
+    .map(
+      (vault) =>
+        `- Name: ${vault.name}
+  Symbol: ${vault.symbol}
+  Token Address: ${vault.tokenAddress}
+  Silo Token Address: ${vault.siloTokenAddress}
+  Config Address: ${vault.configAddress}
+  APY: ${vault.apy.totalAPY}%
+  Rewards: ${vault.rewards
+    .map((reward) => `${reward.tokenSymbol} (${reward.rewardAPY}%)`)
+    .join(', ')}`,
+    )
+    .join('\n');
+
   return `
-walletBalances:
-${walletBalances.map((c) => `- ${c}`).join('\n')}
+{{walletInfo}}
+${walletInfo}
 
-supportedTokens:
-${supportedTokens.map((c) => `- ${c}`).join('\n')}
+{{supportedTokens}}
+${supportedTokensList}
 
-siloVaults:
-${siloVaults.map((c) => `- ${c}`).join('\n')}
+{{siloVaults}}
+${siloVaultsList}
 
-userPortfolio:
-${portfolio}
+userVaults:
+${userVaults
+  .map(
+    (vault) => `- Wallet Address: ${vault.walletAddress}
+  Vault Address: ${vault.vaultAddress}`,
+  )
+  .join('\n')}
 `.trim();
 };
 

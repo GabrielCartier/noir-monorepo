@@ -20,7 +20,6 @@ interface MessageMetadata {
 const createVaultContentSchema = z.object({
   userId: z.string(),
   walletAddress: z.string(),
-  tokenAddress: z.string(),
 });
 
 type CreateVaultContent = z.infer<typeof createVaultContentSchema>;
@@ -40,7 +39,7 @@ async function createVault(
     // Simulate vault creation by generating a random address
     const simulatedVaultAddress = `0x${uuidv4().replace(/-/g, '').slice(0, 40)}`;
 
-    // Create knowledge about the vault with Sonic-specific information
+    // Create knowledge about the vault with only essential information
     const vaultKnowledge: RAGKnowledgeItem = {
       id: uuidv4() as UUID,
       agentId: runtime.agentId,
@@ -153,7 +152,6 @@ export const createVaultAction: Action = {
     const createVaultContent = {
       userId: message.userId,
       walletAddress,
-      tokenAddress: '0x0000000000000000000000000000000000000000', // Default token address for now
     };
 
     try {

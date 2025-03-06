@@ -1,16 +1,14 @@
 import { http, createPublicClient, createWalletClient } from 'viem';
 import { privateKeyToAccount } from 'viem/accounts';
 import { sonic } from 'viem/chains';
-import { VaultFactory } from '../src/plugins/plugin-sonic/contracts/create-vault/VaultFactory';
+import VaultFactoryArtifact from '../../contracts/artifacts/src/contracts/create-vault/VaultFactory.sol/VaultFactory.json'; // Adjust path
 
 async function main() {
   console.log('Deploying VaultFactory to Sonic Blaze testnet...');
 
   // Check for private key
-  if (!process.env.VAULT_CREATOR_PRIVATE_KEY) {
-    throw new Error(
-      'VAULT_CREATOR_PRIVATE_KEY environment variable is not set',
-    );
+  if (!process.env.EVM_PRIVATE_KEY) {
+    throw new Error('EVM_PRIVATE_KEY environment variable is not set');
   }
 
   // Initialize Viem clients
@@ -21,7 +19,7 @@ async function main() {
 
   // Create wallet client with private key
   const account = privateKeyToAccount(
-    process.env.VAULT_CREATOR_PRIVATE_KEY as `0x${string}`,
+    process.env.EVM_PRIVATE_KEY as `0x${string}`,
   );
   console.log('Deploying from account:', account.address);
 
@@ -32,10 +30,10 @@ async function main() {
   });
 
   console.log('Deploying contract...');
-  // Deploy the contract
+  // Deploy the contract using ABI and Bytecode
   const hash = await walletClient.deployContract({
-    abi: VaultFactory.abi,
-    bytecode: VaultFactory.bytecode,
+    abi: VaultFactoryArtifact.abi,
+    bytecode: VaultFactoryArtifact.bytecode,
   });
 
   console.log('Transaction hash:', hash);
@@ -49,9 +47,7 @@ async function main() {
   }
 
   console.log('VaultFactory deployed to:', receipt.contractAddress);
-  console.log(
-    'Please set this address in your .env file as VAULT_FACTORY_ADDRESS',
-  );
+  console.log('Please set this address in your .env file as EVM_PRIVATE_KEY');
 }
 
 main()
