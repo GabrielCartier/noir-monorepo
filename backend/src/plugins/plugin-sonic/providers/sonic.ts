@@ -41,39 +41,18 @@ export class SonicProvider {
   account: PrivateKeyAccount;
   readonly chain: Chain = sonic;
   readonly vaultFactoryAddress: Address;
-  private readonly runtime: IAgentRuntime;
 
   constructor(
     accountOrPrivateKey: PrivateKeyAccount | `0x${string}`,
     cacheManager: ICacheManager,
     chain: Chain,
     vaultFactoryAddress: Address,
-    runtime: IAgentRuntime,
   ) {
-    console.log('Initializing SonicProvider with:', {
-      accountOrPrivateKey:
-        typeof accountOrPrivateKey === 'string'
-          ? 'private key provided'
-          : 'account provided',
-      chainId: chain.id,
-      vaultFactoryAddress,
-    });
-
-    this.account =
-      typeof accountOrPrivateKey === 'string'
-        ? privateKeyToAccount(accountOrPrivateKey)
-        : accountOrPrivateKey;
-
-    console.log('Account created:', {
-      address: this.account.address,
-      chainId: chain.id,
-    });
-
+    this.account = this.createAccount(accountOrPrivateKey);
     this.cacheManager = cacheManager;
     this.cache = new NodeCache({ stdTTL: 300 }); // Cache TTL set to 5 minutes
     this.chain = chain;
     this.vaultFactoryAddress = vaultFactoryAddress;
-    this.runtime = runtime;
   }
 
   /***
@@ -142,67 +121,25 @@ export class SonicProvider {
    * Viem functions
    */
   getPublicClient(): PublicClient {
-    const rpcUrl = this.runtime.getSetting('SONIC_RPC_URL');
-    if (!rpcUrl) {
-      throw new Error('SONIC_RPC_URL is missing');
-    }
     return createPublicClient({
       chain: this.chain,
-      transport: http(rpcUrl),
+      transport: this.createHttpTransport(),
     });
   }
 
   getWalletClient(): WalletClient {
-    console.log('Creating wallet client with:', {
-      accountAddress: this.account.address,
-      chainId: this.chain.id,
-    });
-
-    const rpcUrl = this.runtime.getSetting('SONIC_RPC_URL');
-    if (!rpcUrl) {
-      throw new Error('SONIC_RPC_URL is missing');
-    }
-
-    const client = createWalletClient({
+    return createWalletClient({
       chain: this.chain,
-      transport: http(rpcUrl),
+      transport: this.createHttpTransport(),
       account: this.account,
     });
-
-    // Override writeContract to use signTransaction and sendRawTransaction
-    const publicClient = this.getPublicClient();
-    client.writeContract = async (args) => {
-      console.log('Preparing transaction...');
-      const { request } = await publicClient.simulateContract({
-        ...args,
-        account: this.account.address,
-      });
-
-      console.log('Signing transaction...');
-      const signedTx = await client.signTransaction(request);
-
-      console.log('Sending raw transaction...');
-      const hash = await client.sendRawTransaction({
-        serializedTransaction: signedTx,
-      });
-
-      return hash;
-    };
-
-    console.log('Wallet client created successfully');
-    return client;
   }
 
   private createHttpTransport = () => {
-    const rpcUrl = this.runtime.getSetting('SONIC_RPC_URL');
-    if (!rpcUrl) {
-      throw new Error('SONIC_RPC_URL is missing');
+    if (this.chain.rpcUrls.custom) {
+      return http(this.chain.rpcUrls.custom.http[0]);
     }
-    return http(rpcUrl, {
-      batch: false,
-      retryCount: 3,
-      retryDelay: 1000,
-    });
+    return http(this.chain.rpcUrls.default.http[0]);
   };
 
   /***
@@ -400,7 +337,9 @@ export const initSonicProvider = (runtime: IAgentRuntime) => {
   if (!privateKey) {
     throw new Error('EVM_PRIVATE_KEY is missing');
   }
-  const vaultFactoryAddress = runtime.getSetting('VAULT_FACTORY_ADDRESS');
+  const vaultFactoryAddress = runtime.getSetting(
+    'VAULT_FACTORY_ADDRESS',
+  ) as Address;
   if (!vaultFactoryAddress) {
     throw new Error('VAULT_FACTORY_ADDRESS is missing');
   }
@@ -408,8 +347,7 @@ export const initSonicProvider = (runtime: IAgentRuntime) => {
     privateKey,
     runtime.cacheManager,
     sonicChain,
-    vaultFactoryAddress as `0x${string}`,
-    runtime,
+    vaultFactoryAddress,
   );
 };
 

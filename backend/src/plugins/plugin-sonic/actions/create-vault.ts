@@ -9,10 +9,13 @@ import {
   elizaLogger,
 } from '@elizaos/core';
 import { v4 as uuidv4 } from 'uuid';
-import type { Address, PublicClient } from 'viem';
-import { encodeFunctionData } from 'viem';
+import type { Address } from 'viem';
 import { z } from 'zod';
 import { ethereumAddressSchema } from '../../../validators/ethereum';
+import {
+  viemPublicClientSchema,
+  viemWalletClientSchema,
+} from '../../../validators/viem';
 import { VAULT_FACTORY_ABI } from '../constants/vault-factory-abi';
 import { initSonicProvider } from '../providers/sonic';
 
@@ -25,11 +28,9 @@ interface MessageMetadata {
 const createVaultContentSchema = z.object({
   userId: z.string().uuid(),
   walletAddress: ethereumAddressSchema,
-  agentAddress: ethereumAddressSchema,
   vaultFactoryAddress: ethereumAddressSchema,
-  // FIXME Should be typed
-  publicClient: z.unknown(),
-  walletClient: z.unknown(),
+  publicClient: viemPublicClientSchema,
+  walletClient: viemWalletClientSchema,
 });
 
 type CreateVaultContent = z.infer<typeof createVaultContentSchema>;
@@ -45,131 +46,47 @@ async function createVault(
 ): Promise<CreateVaultResponse> {
   try {
     const parsedParams = createVaultContentSchema.parse(params);
-    const { userId, walletAddress, vaultFactoryAddress, publicClient } =
-      parsedParams;
-    const typedPublicClient = publicClient as PublicClient;
-    const { runtime } = params;
-
-    console.log('Starting vault creation with params:', {
+    const {
       userId,
       walletAddress,
       vaultFactoryAddress,
-    });
-
-    const sonicProvider = initSonicProvider(runtime);
-    console.log(
-      'SonicProvider initialized with account:',
-      sonicProvider.account.address,
-    );
-
-    // Create vault through factory
-    console.log('Creating vault...');
-    const walletClient = sonicProvider.getWalletClient();
-
-    // Get the current nonce
-    const nonce = await typedPublicClient.getTransactionCount({
-      address: sonicProvider.account.address,
-    });
-
-    // Encode the function call
-    console.log('Encoding function call...');
-    const data = encodeFunctionData({
-      abi: VAULT_FACTORY_ABI,
-      functionName: 'createVault',
-      args: [walletAddress],
-    });
-
-    // Estimate gas for the transaction
-    console.log('Estimating gas...');
-    const gas = await typedPublicClient.estimateGas({
-      account: sonicProvider.account.address,
-      to: vaultFactoryAddress,
-      data,
-    });
-
-    // Get the current gas price
-    const { maxFeePerGas, maxPriorityFeePerGas } =
-      await typedPublicClient.estimateFeesPerGas();
-
-    // Prepare the transaction
-    console.log('Preparing transaction...');
-
-    // Sign the transaction
-    console.log('Signing transaction...');
-    const signedTx = await walletClient.signTransaction({
-      to: vaultFactoryAddress,
-      from: sonicProvider.account.address,
-      nonce,
-      gas,
-      chainId: sonicProvider.chain.id,
-      data,
-      account: sonicProvider.account,
-      chain: sonicProvider.chain,
-      type: 'eip1559',
-      maxFeePerGas,
-      maxPriorityFeePerGas,
-    });
-
-    // Send the raw transaction
-    console.log('Sending raw transaction...');
-    const hash = await walletClient.sendRawTransaction({
-      serializedTransaction: signedTx,
-    });
-
-    console.log('Transaction sent, hash:', hash);
-
-    console.log('Waiting for transaction receipt...');
-    const receipt = await typedPublicClient.waitForTransactionReceipt({ hash });
-    console.log('Transaction receipt received:', {
-      contractAddress: receipt.contractAddress,
-      status: receipt.status,
-      blockNumber: receipt.blockNumber,
-    });
-
-    // Log the transaction receipt for debugging
-    elizaLogger.info('Successfully created vault', {
-      contractAddress: receipt.contractAddress,
-    });
-
-    // Log all event topics for debugging
-    console.log(
-      'All event topics:',
-      receipt.logs.map((log) => ({
-        address: log.address,
-        topic: log.topics[0],
-        data: log.data,
-      })),
-    );
-
-    // Look for the VaultCreated event in the transaction receipt
-    const vaultCreatedEvent = receipt.logs.find(
-      (log) =>
-        log.topics[0] ===
-        '0x5d9c31ffa0fecffd7cf379989a3c7af252f0335e0d2a1320b55245912c781f53',
-    );
-
-    if (!vaultCreatedEvent) {
-      console.error(
-        'VaultCreated event not found in receipt logs:',
-        receipt.logs,
-      );
-      throw new Error('VaultCreated event not found in transaction receipt');
+      publicClient,
+      walletClient,
+    } = parsedParams;
+    const agentAddress = walletClient.account?.address;
+    if (!agentAddress) {
+      throw new Error('Agent address not found');
     }
 
-    // The vault address is the first indexed parameter in the event
-    const vaultAddress = vaultCreatedEvent.topics[1] as `0x${string}`;
-    console.log('Found VaultCreated event:', {
-      vaultAddress,
-      eventTopics: vaultCreatedEvent.topics,
-      eventData: vaultCreatedEvent.data,
+    // Approve from the vault address
+    const { request } = await publicClient.simulateContract({
+      account: walletClient.account,
+      address: vaultFactoryAddress,
+      abi: VAULT_FACTORY_ABI,
+      functionName: 'createVault',
+      args: [walletAddress, agentAddress],
+    });
+
+    const hash = await walletClient.writeContract(request);
+    await publicClient.waitForTransactionReceipt({ hash });
+
+    elizaLogger.info('Successfully created vault', {
+      hash,
+    });
+
+    const vaultAddress = await publicClient.readContract({
+      address: vaultFactoryAddress,
+      abi: VAULT_FACTORY_ABI,
+      functionName: 'getUserVault',
+      args: [walletAddress],
     });
 
     // Create knowledge about the vault with Sonic-specific information
     const vaultKnowledge: RAGKnowledgeItem = {
       id: uuidv4() as UUID,
-      agentId: runtime.agentId,
+      agentId: params.runtime.agentId,
       content: {
-        text: `Sonic Vault created for user ${userId}`,
+        text: `Vault created for user ${userId}`,
         metadata: {
           source: 'sonic_plugin',
           type: 'vault_info',
@@ -187,14 +104,14 @@ async function createVault(
     };
 
     // Store the vault knowledge
-    await runtime.databaseAdapter.createKnowledge(vaultKnowledge);
+    await params.runtime.databaseAdapter.createKnowledge(vaultKnowledge);
 
     // Log the vault creation details
     elizaLogger.info('Created Sonic vault:', {
       userId,
       walletAddress,
       vaultAddress,
-      agentId: runtime.agentId,
+      agentId: params.runtime.agentId,
       transactionHash: hash,
     });
 
@@ -247,15 +164,17 @@ export const createVaultAction: Action = {
     if (!rpcUrl) {
       return false;
     }
-    const privateKey = runtime.getSetting('SONIC_PRIVATE_KEY') as `0x${string}`;
+    const privateKey = runtime.getSetting('EVM_PRIVATE_KEY') as `0x${string}`;
     if (!privateKey) {
       return false;
     }
+    console.log('Message content metadata is', message.content.metadata);
     const metadata = message.content.metadata as MessageMetadata;
     const walletAddress = metadata?.walletAddress;
     if (!walletAddress) {
       return false;
     }
+    console.log('Wallet address found');
     return true;
   },
   handler: async (
@@ -288,7 +207,7 @@ export const createVaultAction: Action = {
     const createVaultContent: CreateVaultContent = {
       userId: message.userId,
       walletAddress,
-      agentAddress: sonicProvider.account.address,
+      agentAccount: sonicProvider.account,
       vaultFactoryAddress: sonicProvider.vaultFactoryAddress,
       publicClient: sonicProvider.getPublicClient(),
       walletClient: sonicProvider.getWalletClient(),

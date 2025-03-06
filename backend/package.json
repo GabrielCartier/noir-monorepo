@@ -20,7 +20,7 @@
   "devDependencies": {
     "@types/yargs": "^17.0.33",
     "bun-types": "latest",
-    "dotenv": "^16.4.7",
+    "dotenv": "^16.4.7"
   },
   "engines": {
     "node": ">=22"

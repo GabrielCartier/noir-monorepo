@@ -4,6 +4,11 @@ export const VAULT_FACTORY_ABI = [
     name: 'createVault',
     inputs: [
       {
+        name: 'owner',
+        type: 'address',
+        internalType: 'address',
+      },
+      {
         name: 'agentAddress',
         type: 'address',
         internalType: 'address',
@@ -93,5 +98,20 @@ export const VAULT_FACTORY_ABI = [
       },
     ],
     anonymous: false,
+  },
+  {
+    type: 'error',
+    name: 'InvalidAgent',
+    inputs: [],
+  },
+  {
+    type: 'error',
+    name: 'InvalidOwner',
+    inputs: [],
+  },
+  {
+    type: 'error',
+    name: 'VaultAlreadyExists',
+    inputs: [],
   },
 ] as const;
