@@ -47,21 +47,28 @@ Otherwise, respond with a JSON markdown block containing only the extracted valu
 export const findValidVaultsTemplate = `Given the last message from the user and only that message, extract the token (symbol, address or name) they want to deposit.
 {{recentMessages}}
 
-Then, using the siloVaults data below, follow these steps:
-1. Find all vaults that match the user's token (compare Symbol, Token Address, or Name)
+For the message "Deposit 1 wS in a silo vault":
+1. Token to look for is "wS"
+2. Amount is 1
+
+Using the siloVaults data below:
+1. Find all vaults where either:
+   - Symbol exactly matches "wS"
+   - Name contains "wS"
+   - Token Address matches (if an address was provided)
 2. For each matching vault, map it to this format:
-   - siloAddress: use the "Silo Token Address" field
-   - configAddress: use the "Config Address" field
-   - apy: use the "APY" field (remove % and convert to number)
-   - tokenAddress: use the "Token Address" field
+   - siloAddress: copy the "Silo Token Address" field exactly
+   - configAddress: copy the "Config Address" field exactly
+   - apy: convert the "APY" field to a number (remove the % sign)
+   - tokenAddress: copy the "Token Address" field exactly
 3. Sort the mapped vaults by APY (highest first)
 
 {{siloVaults}}
 
-If no token is found in the message or no matching vaults are found, return:
+If no matching vaults are found, return:
 \`\`\`json
 {
-    "error": "No token specified in message" // or "No vaults found for token X"
+    "error": "No vaults found for token wS"
 }
 \`\`\`
 
@@ -69,10 +76,10 @@ Otherwise return:
 \`\`\`json
 {
     "vaults": [{
-        "siloAddress": string,  // from "Silo Token Address"
-        "configAddress": string,  // from "Config Address" 
-        "apy": number,  // from "APY" (converted to number)
-        "tokenAddress": string  // from "Token Address"
+        "siloAddress": string,
+        "configAddress": string,
+        "apy": number,
+        "tokenAddress": string
     }]
 }
 \`\`\`

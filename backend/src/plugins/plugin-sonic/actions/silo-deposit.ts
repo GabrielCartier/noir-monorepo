@@ -171,14 +171,14 @@ export const depositAction: Action = {
         return false;
       }
 
-      elizaLogger.log('Generating context...');
+      console.log('Generating context...');
       const sonicProvider = await initSonicProvider(runtime);
       const context = composeContext({
         state: currentState,
         template: findValidVaultsTemplate,
       });
 
-      elizaLogger.log('Generating object...');
+      console.log('Generating object...');
       const content = await generateObject({
         runtime,
         context,
@@ -197,24 +197,28 @@ export const depositAction: Action = {
           .or(z.object({ error: z.string() })),
       });
 
-      elizaLogger.log(`Silo deposit content is ${JSON.stringify(content)}`);
+      console.log(`Silo deposit content is ${JSON.stringify(content)}`);
 
-      const depositContent = content.object as DepositContent;
+      // const depositContent = content.object as DepositContent;
 
-      const response = await deposit({
-        ...depositContent,
-        publicClient: sonicProvider.getPublicClient(),
-        walletClient: sonicProvider.getWalletClient(),
-      });
+      // const response = await deposit({
+      //   ...depositContent,
+      //   publicClient: sonicProvider.getPublicClient(),
+      //   walletClient: sonicProvider.getWalletClient(),
+      // });
       if (callback) {
         callback({
-          text: `Successfully deposited ${depositContent.amount} tokens to ${depositContent.siloAddress}\nTransaction Hash: ${response.transactionHash}`,
+          text: `Successfully found vaults`,
           content: {
-            success: true,
-            hash: response.transactionHash,
-            recipient: depositContent.siloAddress,
-            action: 'DEPOSIT',
+            object: content.object,
           },
+          // text: `Successfully deposited ${depositContent.amount} tokens to ${depositContent.siloAddress}\nTransaction Hash: ${response.transactionHash}`,
+          // content: {
+          //   success: true,
+          //   hash: response.transactionHash,
+          //   recipient: depositContent.siloAddress,
+          //   action: 'DEPOSIT',
+          // },
         });
       }
       return true;
