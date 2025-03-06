@@ -27,6 +27,7 @@ const depositContentSchema = z.object({
   tokenAddress: ethereumAddressSchema,
   amount: z.number(),
   userVaultAddress: ethereumAddressSchema,
+  userId: z.string().uuid(),
 });
 
 const extendedDepositContentSchema = depositContentSchema.extend({
@@ -44,6 +45,7 @@ async function deposit(params: ExtendedDepositContent) {
     tokenAddress,
     userVaultAddress,
     amount,
+    userId,
   } = params;
   const agentAddress = walletClient.account?.address;
   if (!agentAddress) {
@@ -82,6 +84,7 @@ async function deposit(params: ExtendedDepositContent) {
     vaultAddress: userVaultAddress,
     amount: bigIntAmount,
     tokenAddress,
+    userId,
   });
 
   return {
@@ -193,32 +196,76 @@ export const depositAction: Action = {
                 tokenAddress: ethereumAddressSchema,
               }),
             ),
+            amount: z.number(),
           })
           .or(z.object({ error: z.string() })),
       });
 
       console.log(`Silo deposit content is ${JSON.stringify(content)}`);
 
-      // const depositContent = content.object as DepositContent;
+      type VaultResponse = {
+        vaults?: Array<{
+          siloAddress: `0x${string}`;
+          configAddress: `0x${string}`;
+          apy: number;
+          tokenAddress: `0x${string}`;
+        }>;
+        amount?: number;
+        error?: string;
+      };
 
-      // const response = await deposit({
-      //   ...depositContent,
-      //   publicClient: sonicProvider.getPublicClient(),
-      //   walletClient: sonicProvider.getWalletClient(),
-      // });
+      const response = content.object as VaultResponse;
+
+      if (response.error) {
+        if (callback) {
+          callback({
+            text: response.error,
+          });
+        }
+        return false;
+      }
+
+      if (!response.vaults || response.vaults.length === 0) {
+        if (callback) {
+          callback({
+            text: 'No vaults found for the specified token',
+          });
+        }
+        return false;
+      }
+
+      if (!response.amount) {
+        if (callback) {
+          callback({
+            text: 'Could not determine the amount to deposit',
+          });
+        }
+        return false;
+      }
+
+      const depositContent = {
+        siloAddress: response.vaults[0].siloAddress,
+        tokenAddress: response.vaults[0].tokenAddress,
+        amount: response.amount,
+        userVaultAddress: walletAddress as `0x${string}`,
+        userId: message.userId,
+      };
+
+      const depositResponse = await deposit({
+        ...depositContent,
+        publicClient: sonicProvider.getPublicClient(),
+        walletClient: sonicProvider.getWalletClient(),
+      });
+
       if (callback) {
         callback({
-          text: `Successfully found vaults`,
+          text: `Successfully deposited ${depositContent.amount} tokens to ${depositContent.siloAddress}\nTransaction Hash: ${depositResponse.transactionHash}`,
           content: {
-            object: content.object,
+            success: true,
+            hash: depositResponse.transactionHash,
+            recipient: depositContent.siloAddress,
+            action: 'DEPOSIT',
           },
-          // text: `Successfully deposited ${depositContent.amount} tokens to ${depositContent.siloAddress}\nTransaction Hash: ${response.transactionHash}`,
-          // content: {
-          //   success: true,
-          //   hash: response.transactionHash,
-          //   recipient: depositContent.siloAddress,
-          //   action: 'DEPOSIT',
-          // },
         });
       }
       return true;

@@ -10,6 +10,7 @@ export interface BaseParams {
 export interface DepositParams extends BaseParams {
   tokenAddress: Address;
   amount: bigint;
+  userId: string;
 }
 
 export interface WithdrawParams extends BaseParams {

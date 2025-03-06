@@ -207,7 +207,8 @@ export class ApiClient {
       elizaLogger.info('[ApiClient] Starting message handling');
       const { agentId } = request;
       const roomId = stringToUuid(request.roomId ?? `default-room-${agentId}`);
-      const userId = stringToUuid(request.userId);
+      const userId =
+        request.userId as `${string}-${string}-${string}-${string}-${string}`;
 
       await agent.ensureConnection(
         userId,
