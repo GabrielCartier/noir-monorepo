@@ -41,12 +41,14 @@ export class SonicProvider {
   account: PrivateKeyAccount;
   readonly chain: Chain = sonic;
   readonly vaultFactoryAddress: Address;
+  private readonly runtime: IAgentRuntime;
 
   constructor(
     accountOrPrivateKey: PrivateKeyAccount | `0x${string}`,
     cacheManager: ICacheManager,
     chain: Chain,
     vaultFactoryAddress: Address,
+    runtime: IAgentRuntime,
   ) {
     console.log('Initializing SonicProvider with:', {
       accountOrPrivateKey:
@@ -71,6 +73,7 @@ export class SonicProvider {
     this.cache = new NodeCache({ stdTTL: 300 }); // Cache TTL set to 5 minutes
     this.chain = chain;
     this.vaultFactoryAddress = vaultFactoryAddress;
+    this.runtime = runtime;
   }
 
   /***
@@ -139,9 +142,13 @@ export class SonicProvider {
    * Viem functions
    */
   getPublicClient(): PublicClient {
+    const rpcUrl = this.runtime.getSetting('SONIC_RPC_URL');
+    if (!rpcUrl) {
+      throw new Error('SONIC_RPC_URL is missing');
+    }
     return createPublicClient({
       chain: this.chain,
-      transport: http('https://rpc.soniclabs.com'),
+      transport: http(rpcUrl),
     });
   }
 
@@ -151,9 +158,14 @@ export class SonicProvider {
       chainId: this.chain.id,
     });
 
+    const rpcUrl = this.runtime.getSetting('SONIC_RPC_URL');
+    if (!rpcUrl) {
+      throw new Error('SONIC_RPC_URL is missing');
+    }
+
     const client = createWalletClient({
       chain: this.chain,
-      transport: http('https://rpc.soniclabs.com'),
+      transport: http(rpcUrl),
       account: this.account,
     });
 
@@ -182,7 +194,11 @@ export class SonicProvider {
   }
 
   private createHttpTransport = () => {
-    return http('https://rpc.soniclabs.com', {
+    const rpcUrl = this.runtime.getSetting('SONIC_RPC_URL');
+    if (!rpcUrl) {
+      throw new Error('SONIC_RPC_URL is missing');
+    }
+    return http(rpcUrl, {
       batch: false,
       retryCount: 3,
       retryDelay: 1000,
@@ -393,6 +409,7 @@ export const initSonicProvider = (runtime: IAgentRuntime) => {
     runtime.cacheManager,
     sonicChain,
     vaultFactoryAddress as `0x${string}`,
+    runtime,
   );
 };
 
