@@ -1,7 +1,7 @@
 {
   "name": "noir-monorepo",
   "private": true,
-  "workspaces": ["frontend", "backend"],
+  "workspaces": ["frontend", "backend", "contracts"],
   "scripts": {
     "dev": "bun run --cwd frontend dev",
     "build": "bun run --cwd frontend build",

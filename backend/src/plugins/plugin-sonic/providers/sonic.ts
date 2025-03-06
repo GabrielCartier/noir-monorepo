@@ -39,16 +39,19 @@ export class SonicProvider {
   private readonly cacheManager: ICacheManager;
   account: PrivateKeyAccount;
   readonly chain: Chain = sonic;
+  readonly vaultFactoryAddress: Address;
 
   constructor(
     accountOrPrivateKey: PrivateKeyAccount | `0x${string}`,
     cacheManager: ICacheManager,
     chain: Chain,
+    vaultFactoryAddress: Address,
   ) {
     this.account = this.createAccount(accountOrPrivateKey);
     this.cacheManager = cacheManager;
     this.cache = new NodeCache({ stdTTL: 300 }); // Cache TTL set to 5 minutes
     this.chain = chain;
+    this.vaultFactoryAddress = vaultFactoryAddress;
   }
 
   /***
@@ -330,7 +333,16 @@ export const initSonicProvider = (runtime: IAgentRuntime) => {
   if (!privateKey) {
     throw new Error('SONIC_PRIVATE_KEY is missing');
   }
-  return new SonicProvider(privateKey, runtime.cacheManager, sonicChain);
+  const vaultFactoryAddress = runtime.getSetting('VAULT_FACTORY_ADDRESS');
+  if (!vaultFactoryAddress) {
+    throw new Error('VAULT_FACTORY_ADDRESS is missing');
+  }
+  return new SonicProvider(
+    privateKey,
+    runtime.cacheManager,
+    sonicChain,
+    vaultFactoryAddress,
+  );
 };
 
 const sonicProvider: Provider = {

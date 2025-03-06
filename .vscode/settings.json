@@ -18,7 +18,10 @@
     "editor.defaultFormatter": "biomejs.biome"
   },
   "biome.rename": true,
-  // Disable prettier to avoid conflicts
-  "prettier.enable": false,
-  "eslint.enable": false
+
+  "[solidity]": {
+    "editor.defaultFormatter": "JuanBlanco.solidity"
+  },
+  "solidity.formatter": "forge",
+  "prettier.configPath": "./contracts/prettier.config.js"
 }
