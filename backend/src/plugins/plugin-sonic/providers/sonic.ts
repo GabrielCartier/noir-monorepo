@@ -9,6 +9,7 @@ import type {
 import NodeCache from 'node-cache';
 import {
   http,
+  type Address,
   type Chain,
   type PrivateKeyAccount,
   type PublicClient,
@@ -47,7 +48,25 @@ export class SonicProvider {
     chain: Chain,
     vaultFactoryAddress: Address,
   ) {
-    this.account = this.createAccount(accountOrPrivateKey);
+    console.log('Initializing SonicProvider with:', {
+      accountOrPrivateKey:
+        typeof accountOrPrivateKey === 'string'
+          ? 'private key provided'
+          : 'account provided',
+      chainId: chain.id,
+      vaultFactoryAddress,
+    });
+
+    this.account =
+      typeof accountOrPrivateKey === 'string'
+        ? privateKeyToAccount(accountOrPrivateKey)
+        : accountOrPrivateKey;
+
+    console.log('Account created:', {
+      address: this.account.address,
+      chainId: chain.id,
+    });
+
     this.cacheManager = cacheManager;
     this.cache = new NodeCache({ stdTTL: 300 }); // Cache TTL set to 5 minutes
     this.chain = chain;
@@ -122,20 +141,52 @@ export class SonicProvider {
   getPublicClient(): PublicClient {
     return createPublicClient({
       chain: this.chain,
-      transport: this.createHttpTransport(),
+      transport: http('https://rpc.soniclabs.com'),
     });
   }
 
   getWalletClient(): WalletClient {
-    return createWalletClient({
+    console.log('Creating wallet client with:', {
+      accountAddress: this.account.address,
+      chainId: this.chain.id,
+    });
+
+    const client = createWalletClient({
       chain: this.chain,
-      transport: this.createHttpTransport(),
+      transport: http('https://rpc.soniclabs.com'),
       account: this.account,
     });
+
+    // Override writeContract to use signTransaction and sendRawTransaction
+    const publicClient = this.getPublicClient();
+    client.writeContract = async (args) => {
+      console.log('Preparing transaction...');
+      const { request } = await publicClient.simulateContract({
+        ...args,
+        account: this.account.address,
+      });
+
+      console.log('Signing transaction...');
+      const signedTx = await client.signTransaction(request);
+
+      console.log('Sending raw transaction...');
+      const hash = await client.sendRawTransaction({
+        serializedTransaction: signedTx,
+      });
+
+      return hash;
+    };
+
+    console.log('Wallet client created successfully');
+    return client;
   }
 
   private createHttpTransport = () => {
-    return http(this.chain.rpcUrls.custom.http[0]);
+    return http('https://rpc.soniclabs.com', {
+      batch: false,
+      retryCount: 3,
+      retryDelay: 1000,
+    });
   };
 
   /***
@@ -329,9 +380,9 @@ export const initSonicProvider = (runtime: IAgentRuntime) => {
     rpcUrls: { ...baseChain.rpcUrls, custom: { http: [rpcUrl] } },
   };
 
-  const privateKey = runtime.getSetting('SONIC_PRIVATE_KEY') as `0x${string}`;
+  const privateKey = runtime.getSetting('EVM_PRIVATE_KEY') as `0x${string}`;
   if (!privateKey) {
-    throw new Error('SONIC_PRIVATE_KEY is missing');
+    throw new Error('EVM_PRIVATE_KEY is missing');
   }
   const vaultFactoryAddress = runtime.getSetting('VAULT_FACTORY_ADDRESS');
   if (!vaultFactoryAddress) {
@@ -341,7 +392,7 @@ export const initSonicProvider = (runtime: IAgentRuntime) => {
     privateKey,
     runtime.cacheManager,
     sonicChain,
-    vaultFactoryAddress,
+    vaultFactoryAddress as `0x${string}`,
   );
 };
 

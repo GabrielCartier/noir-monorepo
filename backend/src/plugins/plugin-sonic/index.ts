@@ -1,6 +1,5 @@
 import type { Plugin } from '@elizaos/core';
-import { createVaultAction } from './actions/create-vault';
-import { depositAction } from './actions/silo-deposit';
+import { createVaultAction, depositAction } from './actions';
 import { sonicProvider } from './providers/sonic';
 
 export const sonicPlugin: Plugin = {
