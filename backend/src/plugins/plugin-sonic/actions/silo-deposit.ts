@@ -19,7 +19,7 @@ import {
 import { VAULT_ABI } from '../constants';
 import { initSonicProvider } from '../providers/sonic';
 import { deposit as depositSilo } from '../services/silo-service';
-import { SILO_DEPOSIT_TEMPLATE } from '../templates/silo-deposit-template';
+import { findValidVaultsTemplate } from '../templates/silo-deposit-template';
 import type { MessageMetadata } from '../types/message-metadata';
 
 const depositContentSchema = z.object({
@@ -122,6 +122,7 @@ export const depositAction: Action = {
   ],
   // TODO Probably need to validate that we have the silo vaults data loaded
   validate: async (runtime: IAgentRuntime, message: Memory) => {
+    elizaLogger.log('Validating silo deposit...');
     const vaultFactoryAddress = runtime.getSetting('VAULT_FACTORY_ADDRESS');
     if (!vaultFactoryAddress) {
       return false;
@@ -150,46 +151,56 @@ export const depositAction: Action = {
     },
     callback?: HandlerCallback,
   ) => {
-    elizaLogger.log('Silo Deposit action handler called');
-    const currentState = state
-      ? await runtime.updateRecentMessageState(state)
-      : await runtime.composeState(message);
-
-    // Extract wallet address from message metadata
-    const metadata = message.content.metadata as MessageMetadata;
-    const walletAddress = metadata?.walletAddress;
-    // Should not happen, it is validated
-    if (!walletAddress) {
-      elizaLogger.error('No wallet address provided in message metadata');
-      if (callback) {
-        callback({
-          text: 'Error: No wallet address provided',
-        });
-      }
-      return false;
-    }
-
-    const sonicProvider = await initSonicProvider(runtime);
-    const context = composeContext({
-      state: currentState,
-      template: SILO_DEPOSIT_TEMPLATE,
-    });
-    elizaLogger.log(`Silo deposit context is ${JSON.stringify(context)}`);
-
-    const content = await generateObject({
-      runtime,
-      context,
-      modelClass: ModelClass.LARGE,
-      schema: depositContentSchema,
-      schemaName: 'depositContentSchema',
-      schemaDescription: 'Schema for the deposit content',
-    });
-
-    elizaLogger.log(`Silo deposit content is ${JSON.stringify(content)}`);
-
-    const depositContent = content.object as DepositContent;
-
     try {
+      elizaLogger.log('Silo Deposit action handler called');
+      const currentState = state
+        ? await runtime.updateRecentMessageState(state)
+        : await runtime.composeState(message);
+
+      // Extract wallet address from message metadata
+      const metadata = message.content.metadata as MessageMetadata;
+      const walletAddress = metadata?.walletAddress;
+      // Should not happen, it is validated
+      if (!walletAddress) {
+        elizaLogger.error('No wallet address provided in message metadata');
+        if (callback) {
+          callback({
+            text: 'Error: No wallet address provided',
+          });
+        }
+        return false;
+      }
+
+      elizaLogger.log('Generating context...');
+      const sonicProvider = await initSonicProvider(runtime);
+      const context = composeContext({
+        state: currentState,
+        template: findValidVaultsTemplate,
+      });
+
+      elizaLogger.log('Generating object...');
+      const content = await generateObject({
+        runtime,
+        context,
+        modelClass: ModelClass.LARGE,
+        schema: z
+          .object({
+            vaults: z.array(
+              z.object({
+                siloAddress: ethereumAddressSchema,
+                configAddress: ethereumAddressSchema,
+                apy: z.number(),
+                tokenAddress: ethereumAddressSchema,
+              }),
+            ),
+          })
+          .or(z.object({ error: z.string() })),
+      });
+
+      elizaLogger.log(`Silo deposit content is ${JSON.stringify(content)}`);
+
+      const depositContent = content.object as DepositContent;
+
       const response = await deposit({
         ...depositContent,
         publicClient: sonicProvider.getPublicClient(),
