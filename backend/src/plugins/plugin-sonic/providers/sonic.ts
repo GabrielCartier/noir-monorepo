@@ -9,6 +9,7 @@ import type {
 import NodeCache from 'node-cache';
 import {
   http,
+  type Address,
   type Chain,
   type PrivateKeyAccount,
   type PublicClient,
@@ -135,7 +136,10 @@ export class SonicProvider {
   }
 
   private createHttpTransport = () => {
-    return http(this.chain.rpcUrls.custom.http[0]);
+    if (this.chain.rpcUrls.custom) {
+      return http(this.chain.rpcUrls.custom.http[0]);
+    }
+    return http(this.chain.rpcUrls.default.http[0]);
   };
 
   /***
@@ -329,11 +333,13 @@ export const initSonicProvider = (runtime: IAgentRuntime) => {
     rpcUrls: { ...baseChain.rpcUrls, custom: { http: [rpcUrl] } },
   };
 
-  const privateKey = runtime.getSetting('SONIC_PRIVATE_KEY') as `0x${string}`;
+  const privateKey = runtime.getSetting('EVM_PRIVATE_KEY') as `0x${string}`;
   if (!privateKey) {
-    throw new Error('SONIC_PRIVATE_KEY is missing');
+    throw new Error('EVM_PRIVATE_KEY is missing');
   }
-  const vaultFactoryAddress = runtime.getSetting('VAULT_FACTORY_ADDRESS');
+  const vaultFactoryAddress = runtime.getSetting(
+    'VAULT_FACTORY_ADDRESS',
+  ) as Address;
   if (!vaultFactoryAddress) {
     throw new Error('VAULT_FACTORY_ADDRESS is missing');
   }

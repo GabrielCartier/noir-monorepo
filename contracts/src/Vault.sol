@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.4;
+pragma solidity ^0.8.26;
 
 import {OwnableRoles} from "solady/auth/OwnableRoles.sol";
 import {ReentrancyGuard} from "solady/utils/ReentrancyGuard.sol";
@@ -18,11 +18,11 @@ contract Vault is OwnableRoles, ReentrancyGuard {
     error InvalidAmount();
     error InsufficientBalance();
 
-    constructor(address agentAddress) {
-        _initializeOwner(msg.sender);
+    constructor(address owner, address agentAddress) {
+        _initializeOwner(owner);
         _grantRoles(agentAddress, AGENT_ROLE);
         isPaused = false;
-        emit VaultCreated(address(this), msg.sender);
+        emit VaultCreated(address(this), owner);
     }
 
     function deposit(address token, uint256 amount)

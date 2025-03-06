@@ -3,6 +3,11 @@ export const VAULT_ABI = [
     type: 'constructor',
     inputs: [
       {
+        name: 'owner',
+        type: 'address',
+        internalType: 'address',
+      },
+      {
         name: 'agentAddress',
         type: 'address',
         internalType: 'address',

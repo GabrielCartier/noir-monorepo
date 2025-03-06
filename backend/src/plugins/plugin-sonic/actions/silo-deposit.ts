@@ -10,8 +10,7 @@ import {
   generateObject,
 } from '@elizaos/core';
 import { erc20Abi, parseUnits } from 'viem';
-import { Vault } from '../constants';
-import { SILO_ABI } from '../constants/silo-abi';
+import { SILO_ABI, VAULT_ABI } from '../constants';
 import { initSonicProvider } from '../providers/sonic';
 import { SILO_DEPOSIT_TEMPLATE } from '../templates/silo-deposit-template';
 import type { DepositParams } from '../types/silo-service';
@@ -29,14 +28,13 @@ async function deposit(params: DepositParams) {
   } = params;
 
   // First check if the agent has authorization over the vault
-  const isWhitelisted = await publicClient.readContract({
+  const isOwner = await publicClient.readContract({
     address: vaultAddress,
-    abi: Vault.abi,
-    functionName: 'isWhitelisted',
-    args: [agentAddress],
+    abi: VAULT_ABI,
+    functionName: 'owner',
   });
 
-  if (!isWhitelisted) {
+  if (!isOwner) {
     throw new Error('Agent is not whitelisted to operate this vault');
   }
 

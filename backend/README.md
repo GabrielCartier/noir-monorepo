@@ -14,6 +14,7 @@ curl -X POST http://localhost:3000/message \
     "agentId": "416659f6-a8ab-4d90-87b5-fd5635ebe37d",
     "text": "create a vault for me",
     "roomId": "default-room",
-    "userId": "12dea96f-ec20-0935-a6ab-75692c994959",
-    "walletAddress": "0x1234567890thisisatestabcdef12345678"
+    "userId": "9229f9f2-b61a-0cec-a3ab-220661fc7e27",
+    "walletAddress": "0x7e393441Edc1Bb1621318E000cDfC74947f23b26"
   }'
+  
