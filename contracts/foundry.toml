@@ -4,7 +4,7 @@ out = "out"
 libs = ["dependencies"]
 optimizer = true
 optimizer_runs = 200
-via_ir = true
+solc = "0.8.26"
 
 remappings = [
     "@lib/=lib",
@@ -30,14 +30,11 @@ remappings_version = false
 
 
 [etherscan]
-sonic = { key = "${ETHERSCAN_API_KEY}", url = "https://api.sonicscan.org/api" }
+146 = { key = "${ETHERSCAN_API_KEY}", url = "https://api.sonicscan.org/api" }
+
 
 [profile.default.fuzz]
 runs = 1000
 
 [profile.default.rpc_endpoints]
-sonic = "${SONIC_RPC_URL}"
-
-[profile.default.etherscan]
-sonic = { key = "${ETHERSCAN_API_KEY}" }
-
+146 = "${SONIC_RPC_URL}"

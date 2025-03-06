@@ -8,18 +8,13 @@ import {VaultFactory} from "../src/VaultFactory.sol";
 contract DeployScript is Script {
 
     function run() external {
-        // Load the private key from .env
         uint256 deployerPrivateKey = vm.envUint("PRIVATE_KEY");
-
-        // Start broadcasting transactions
         vm.startBroadcast(deployerPrivateKey);
 
-        // Deploy OptionsVault
+        // Deploy VaultFactory
         VaultFactory vaultFactory = new VaultFactory();
-
         vm.stopBroadcast();
 
-        // Log the deployed addresses
         console.log("VaultFactory deployed to:", address(vaultFactory));
     }
 }
