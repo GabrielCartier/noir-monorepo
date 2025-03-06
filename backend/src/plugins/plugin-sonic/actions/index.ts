@@ -1,2 +1,2 @@
 export { depositAction } from './silo-deposit';
-export { withdrawAction } from './silo-withdraw';
+export { createVaultAction } from './create-vault-test';
