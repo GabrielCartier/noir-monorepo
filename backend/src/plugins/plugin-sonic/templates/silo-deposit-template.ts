@@ -8,12 +8,13 @@ The user will provide the amount to deposit and the token (name, symbol or addre
 {{walletInfo}}
 {{supportedTokens}}
 {{siloVaults}}
+{{userVaultAddress}}
 
 Extract the following information about the requested silo deposit:
 - Input token symbol or address (the token to deposit)
 - The silo address to deposit the token (it should be called siloTokenAddress in the supportedTokens list)
 - The silo config address to deposit the token (it should be called siloConfigAddress in the supportedTokens list)
-- The vault address (from the user's vaults list)
+- The user's vault address (from the userVaultAddress)
 - Amount to deposit: Must be a string representing the amount (only number without coin symbol, e.g., "0.1")
 
 If there is a problem with the information provided, respond with a JSON markdown block containing your response:
@@ -31,7 +32,7 @@ Otherwise, respond with a JSON markdown block containing only the extracted valu
     "amount": number | null,
     "siloAddress": string | null,
     "tokenAddress": string | null,
-    "vaultAddress": string | null,
+    "userVaultAddress": string | null,
     "siloConfigAddress": string | null
 }
 \`\`\`

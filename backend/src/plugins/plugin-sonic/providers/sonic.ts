@@ -27,6 +27,7 @@ import { fetchSiloMarkets } from '../../../services/silo-service';
 import type { SiloVaultData } from '../../../types/common/silo-vault';
 import { SILO_ABI } from '../constants/silo-abi';
 import { SUPPORTED_TOKENS } from '../constants/supported-tokens';
+import type { MessageMetadata } from '../types/message-metadata';
 import type { PositionInfo } from '../types/position-info';
 import type { SonicPortfolio } from '../types/sonic-portfolio';
 import type { Token } from '../types/token';
@@ -156,6 +157,8 @@ export class SonicProvider {
     return mapSiloToSiloVaultData(siloVaults);
   }
 
+  // FIXME We need to fetch the user vault here
+  // It should be in the knowledge base but no idea how to extract it
   async fetchPortfolioValue(): Promise<SonicPortfolio> {
     try {
       const cacheKey = `portfolio-${this.account.address}`;
@@ -244,7 +247,15 @@ export class SonicProvider {
   }
 }
 
-const formatSonicContext = async (runtime: IAgentRuntime) => {
+const getUserAddress = (message: Memory) => {
+  const metadata = message.content.metadata as MessageMetadata;
+  return metadata.walletAddress;
+};
+
+const formatSonicContext = async (
+  runtime: IAgentRuntime,
+  userAddress: Address | undefined,
+) => {
   const sonicProvider = initSonicProvider(runtime);
   const walletBalances = await sonicProvider.getWalletBalances();
   const supportedTokens = await sonicProvider.getSupportedTokens();
@@ -254,14 +265,15 @@ const formatSonicContext = async (runtime: IAgentRuntime) => {
   const userKnowledge = await runtime.databaseAdapter.getKnowledge({
     agentId: runtime.agentId,
     limit: 10, // Limit to most recent 10 items
-    query: `content->'metadata'->>'walletAddress' = '${sonicProvider.account.address}' AND content->'metadata'->>'type' = 'vault_info'`,
+    query: `content->'metadata'->>'walletAddress' = '${userAddress}' AND content->'metadata'->>'type' = 'vault_info'`,
   });
 
   // Format vault-related knowledge
-  const userVaults = userKnowledge.map((item) => ({
-    vaultAddress: item.content.metadata?.vaultAddress,
-    walletAddress: item.content.metadata?.walletAddress,
-  }));
+  const userVault = userKnowledge.find(
+    (item) =>
+      item.content.metadata?.vaultAddress &&
+      item.content.metadata?.walletAddress === userAddress,
+  )?.content.metadata?.vaultAddress;
 
   // Format wallet info
   const walletInfo = walletBalances
@@ -312,14 +324,9 @@ ${supportedTokensList}
 {{siloVaults}}
 ${siloVaultsList}
 
-userVaults:
-${userVaults
-  .map(
-    (vault) => `- Wallet Address: ${vault.walletAddress}
-  Vault Address: ${vault.vaultAddress}`,
-  )
-  .join('\n')}
-`.trim();
+{{userVaultAddress}}
+${userVault}
+`;
 };
 
 export const initSonicProvider = (runtime: IAgentRuntime) => {
@@ -333,7 +340,7 @@ export const initSonicProvider = (runtime: IAgentRuntime) => {
     rpcUrls: { ...baseChain.rpcUrls, custom: { http: [rpcUrl] } },
   };
 
-  const privateKey = runtime.getSetting('EVM_PRIVATE_KEY') as `0x${string}`;
+  const privateKey = runtime.getSetting('EVM_PRIVATE_KEY') as `0x$string`;
   if (!privateKey) {
     throw new Error('EVM_PRIVATE_KEY is missing');
   }
@@ -354,11 +361,12 @@ export const initSonicProvider = (runtime: IAgentRuntime) => {
 const sonicProvider: Provider = {
   get: async (
     runtime: IAgentRuntime,
-    _message: Memory,
+    message: Memory,
     _state?: State,
   ): Promise<string | null> => {
     try {
-      return await formatSonicContext(runtime);
+      const userAddress = getUserAddress(message);
+      return await formatSonicContext(runtime, userAddress);
     } catch (error) {
       console.error('Error in Sonic provider:', error);
       return null;

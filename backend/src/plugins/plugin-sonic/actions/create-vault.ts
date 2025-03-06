@@ -9,7 +9,6 @@ import {
   elizaLogger,
 } from '@elizaos/core';
 import { v4 as uuidv4 } from 'uuid';
-import type { Address } from 'viem';
 import { z } from 'zod';
 import { ethereumAddressSchema } from '../../../validators/ethereum';
 import {
@@ -18,12 +17,7 @@ import {
 } from '../../../validators/viem';
 import { VAULT_FACTORY_ABI } from '../constants/vault-factory-abi';
 import { initSonicProvider } from '../providers/sonic';
-
-// TODO Move this to a type
-interface MessageMetadata {
-  walletAddress?: Address;
-  [key: string]: unknown;
-}
+import type { MessageMetadata } from '../types/message-metadata';
 
 const createVaultContentSchema = z.object({
   userId: z.string().uuid(),
@@ -168,13 +162,11 @@ export const createVaultAction: Action = {
     if (!privateKey) {
       return false;
     }
-    console.log('Message content metadata is', message.content.metadata);
     const metadata = message.content.metadata as MessageMetadata;
     const walletAddress = metadata?.walletAddress;
     if (!walletAddress) {
       return false;
     }
-    console.log('Wallet address found');
     return true;
   },
   handler: async (
@@ -207,7 +199,6 @@ export const createVaultAction: Action = {
     const createVaultContent: CreateVaultContent = {
       userId: message.userId,
       walletAddress,
-      agentAccount: sonicProvider.account,
       vaultFactoryAddress: sonicProvider.vaultFactoryAddress,
       publicClient: sonicProvider.getPublicClient(),
       walletClient: sonicProvider.getWalletClient(),

@@ -6,11 +6,10 @@ export interface BaseParams {
   walletClient: WalletClient;
   siloAddress: Address;
   vaultAddress: Address;
-  agentAddress: Address;
 }
 export interface DepositParams extends BaseParams {
   tokenAddress: Address;
-  amount: number;
+  amount: bigint;
 }
 
 export interface WithdrawParams extends BaseParams {
