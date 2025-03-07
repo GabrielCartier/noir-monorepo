@@ -17,6 +17,12 @@ import {
 } from '@elizaos/core';
 import { Elysia } from 'elysia';
 import postgresAdapter from '../database';
+import { initSonicProvider } from '../providers/sonic';
+import {
+  createVault,
+  getVault,
+  getVaultBalance,
+} from '../services/vault-service';
 
 export const messageHandlerTemplate =
   // {{goals}}
@@ -142,6 +148,142 @@ export class ApiClient {
   }
 
   private setupRoutes() {
+    // Add vault check endpoint
+    this.app.post('/vault/check', async (context) => {
+      try {
+        elizaLogger.info('[ApiClient] Vault check endpoint called');
+        const body = context.body as { walletAddress: string };
+
+        if (!body.walletAddress) {
+          elizaLogger.error('[ApiClient] No walletAddress provided in request');
+          return Response.json(
+            { error: 'No walletAddress provided' },
+            { status: 400 },
+          );
+        }
+
+        // Get the first agent since we need its runtime for the public client
+        const firstAgent = Array.from(this.agents.values())[0];
+        if (!firstAgent) {
+          elizaLogger.error('[ApiClient] No agent available for vault check');
+          return Response.json(
+            { error: 'No agent available' },
+            { status: 500 },
+          );
+        }
+
+        // Initialize the Sonic provider to get properly configured clients
+        const sonicProvider = await initSonicProvider(firstAgent);
+        const publicClient = sonicProvider.getPublicClient();
+        const walletClient = sonicProvider.getWalletClient();
+        const vaultFactoryAddress = sonicProvider.vaultFactoryAddress;
+
+        const { vaultAddress } = await getVault({
+          publicClient,
+          walletClient,
+          vaultFactoryAddress,
+          userAddress: body.walletAddress as `0x${string}`,
+        });
+
+        // Get the balance if vault exists
+        let balance = '0';
+        if (vaultAddress !== '0x0000000000000000000000000000000000000000') {
+          const balanceResponse = await getVaultBalance({
+            publicClient,
+            vaultAddress,
+            amount: BigInt(0),
+            walletClient,
+            tokenAddress:
+              '0x039e2fB66102314Ce7b64Ce5Ce3E5183bc94aD38' as `0x${string}`, // Sonic token address
+          });
+          balance = balanceResponse.balance.toString();
+        }
+
+        return Response.json({
+          exists: vaultAddress !== '0x0000000000000000000000000000000000000000',
+          vaultAddress,
+          balance,
+        });
+      } catch (error) {
+        elizaLogger.error('[ApiClient] Error checking vault:', error);
+        return Response.json(
+          {
+            error:
+              error instanceof Error ? error.message : 'Unknown error occurred',
+          },
+          { status: 500 },
+        );
+      }
+    });
+
+    // Add vault creation endpoint
+    this.app.post('/vault/create', async (context) => {
+      try {
+        elizaLogger.info('[ApiClient] Vault creation endpoint called');
+        const body = context.body as { walletAddress: string; userId: string };
+
+        if (!body.walletAddress || !body.userId) {
+          elizaLogger.error(
+            '[ApiClient] Missing required parameters in request',
+          );
+          return Response.json(
+            { error: 'Missing required parameters' },
+            { status: 400 },
+          );
+        }
+
+        // Get the first agent since we need its runtime
+        const firstAgent = Array.from(this.agents.values())[0];
+        if (!firstAgent) {
+          elizaLogger.error(
+            '[ApiClient] No agent available for vault creation',
+          );
+          return Response.json(
+            { error: 'No agent available' },
+            { status: 500 },
+          );
+        }
+
+        // Initialize the Sonic provider to get properly configured clients
+        const sonicProvider = await initSonicProvider(firstAgent);
+        const publicClient = sonicProvider.getPublicClient();
+        const walletClient = sonicProvider.getWalletClient();
+        const vaultFactoryAddress = sonicProvider.vaultFactoryAddress;
+        const agentAddress = sonicProvider.account.address;
+
+        const response = await createVault({
+          userId: body.userId,
+          walletAddress: body.walletAddress as `0x${string}`,
+          agentAddress,
+          vaultFactoryAddress,
+          publicClient,
+          walletClient,
+          runtime: firstAgent,
+        });
+
+        if (!response.success) {
+          return Response.json(
+            { error: response.error || 'Failed to create vault' },
+            { status: 500 },
+          );
+        }
+
+        return Response.json({
+          success: true,
+          vaultAddress: response.vaultAddress,
+        });
+      } catch (error) {
+        elizaLogger.error('[ApiClient] Error creating vault:', error);
+        return Response.json(
+          {
+            error:
+              error instanceof Error ? error.message : 'Unknown error occurred',
+          },
+          { status: 500 },
+        );
+      }
+    });
+
     // Handle both /message and /:agentId/message patterns
     this.app.post('/message', async (context) => {
       try {

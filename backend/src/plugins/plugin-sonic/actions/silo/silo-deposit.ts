@@ -134,7 +134,7 @@ export const depositAction: Action = {
     if (!rpcUrl) {
       return false;
     }
-    const privateKey = runtime.getSetting('SONIC_PRIVATE_KEY') as `0x${string}`;
+    const privateKey = runtime.getSetting('EVM_PRIVATE_KEY') as `0x${string}`;
     if (!privateKey) {
       return false;
     }

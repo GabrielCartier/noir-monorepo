@@ -10,6 +10,7 @@ const requiredEnvVars = [
   'EVM_PRIVATE_KEY',
   'SONIC_RPC_URL',
   'SONIC_STAKING_ADDRESS',
+  'EVM_PROVIDER_URL',
 ] as const;
 
 for (const envVar of requiredEnvVars) {
@@ -23,4 +24,5 @@ export const env = {
   EVM_PRIVATE_KEY: process.env.EVM_PRIVATE_KEY as `0x${string}`,
   SONIC_RPC_URL: process.env.SONIC_RPC_URL,
   SONIC_STAKING_ADDRESS: process.env.SONIC_STAKING_ADDRESS as `0x${string}`,
+  EVM_PROVIDER_URL: process.env.EVM_PROVIDER_URL,
 } as const;

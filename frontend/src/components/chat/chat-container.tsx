@@ -1,4 +1,5 @@
 'use client';
+import { useWallet } from '@/src/components/providers/wallet-provider';
 import { useEffect, useRef, useState } from 'react';
 import { ChatBox } from 'src/components/chat/chat-box';
 import { ChatInfo } from 'src/components/chat/chat-info';
@@ -14,14 +15,13 @@ import { cn } from 'src/lib/utils';
 import { messagesService } from 'src/services/messages';
 import { useDemoStore } from 'src/stores/demo-store';
 import type { Message } from 'src/types/messages';
-import { useAccount } from 'wagmi';
 
 export const ChatContainer = () => {
   const [isExpanded, setIsExpanded] = useState(false);
   const [messages, setMessages] = useState<Message[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [mounted, setMounted] = useState(false);
-  const { isConnected, isConnecting, address, chain } = useAccount();
+  const { address, isConnecting } = useWallet();
   const { isDemoMode } = useDemoStore();
   const hasInitialized = useRef(false);
 
@@ -38,7 +38,7 @@ export const ChatContainer = () => {
 
     const initializeConversation = async () => {
       if (
-        (isConnected || isDemoMode) &&
+        (address || isDemoMode) &&
         isExpanded &&
         !hasInitialized.current &&
         messages.length === 0
@@ -48,7 +48,7 @@ export const ChatContainer = () => {
         try {
           const response = await messagesService.send({
             name: address ?? '',
-            text: `initialize user {walletAddress: ${address}, chainId: ${chain?.id}}`,
+            text: `initialize user {walletAddress: ${address}}`,
             walletAddress: address ?? undefined,
           });
           const newMessages = processApiResponse(response);
@@ -62,15 +62,7 @@ export const ChatContainer = () => {
     };
 
     initializeConversation();
-  }, [
-    isConnected,
-    isDemoMode,
-    address,
-    messages.length,
-    chain?.id,
-    isExpanded,
-    mounted,
-  ]);
+  }, [address, isDemoMode, messages.length, isExpanded, mounted]);
 
   const handleSendMessage = async (text: string) => {
     // Add user message
@@ -100,7 +92,7 @@ export const ChatContainer = () => {
 
   const status = isConnecting
     ? 'connecting'
-    : isConnected
+    : address
       ? 'connected'
       : 'disconnected';
 
@@ -185,7 +177,7 @@ export const ChatContainer = () => {
               >
                 <ChatBox
                   onSend={handleSendMessage}
-                  disabled={!isConnected}
+                  disabled={!address}
                   loading={isLoading}
                   onFocus={() => setIsExpanded(true)}
                 />

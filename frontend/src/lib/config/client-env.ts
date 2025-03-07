@@ -4,6 +4,8 @@ const clientEnvSchema = z.object({
   NEXT_PUBLIC_SUPABASE_URL: z.string().url(),
   NEXT_PUBLIC_SUPABASE_ANON_KEY: z.string().min(1),
   NEXT_PUBLIC_API_URL: z.string().url(),
+  NEXT_PUBLIC_SONIC_RPC_URL: z.string().url(),
+  NEXT_PUBLIC_ALCHEMY_API_KEY: z.string().min(1),
 });
 
 function getClientEnv() {
@@ -12,6 +14,8 @@ function getClientEnv() {
     NEXT_PUBLIC_SUPABASE_URL: process.env.NEXT_PUBLIC_SUPABASE_URL,
     NEXT_PUBLIC_SUPABASE_ANON_KEY: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
     NEXT_PUBLIC_API_URL: process.env.NEXT_PUBLIC_API_URL,
+    NEXT_PUBLIC_SONIC_RPC_URL: process.env.NEXT_PUBLIC_SONIC_RPC_URL,
+    NEXT_PUBLIC_ALCHEMY_API_KEY: process.env.NEXT_PUBLIC_ALCHEMY_API_KEY,
   });
 
   if (!envParse.success) {

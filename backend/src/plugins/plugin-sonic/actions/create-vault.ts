@@ -11,8 +11,8 @@ import {
 import { v4 as uuidv4 } from 'uuid';
 import type { Account, Address, PublicClient, WalletClient } from 'viem';
 import { z } from 'zod';
+import { VAULT_FACTORY_ABI } from '../../../constants/abis/vault-factory-abi';
 import { ethereumAddressSchema } from '../../../validators/ethereum';
-import { VAULT_FACTORY_ABI } from '../constants/vault-factory-abi';
 import { initSonicProvider } from '../providers/sonic';
 
 // TODO Move this to a type
@@ -173,7 +173,7 @@ export const createVaultAction: Action = {
     if (!rpcUrl) {
       return false;
     }
-    const privateKey = runtime.getSetting('SONIC_PRIVATE_KEY') as `0x${string}`;
+    const privateKey = runtime.getSetting('EVM_PRIVATE_KEY') as `0x${string}`;
     if (!privateKey) {
       return false;
     }
