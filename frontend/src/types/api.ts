@@ -1,6 +1,9 @@
 export interface MessageRequest {
   name: string;
   text: string;
+  agentId?: string;
+  userId?: string;
+  walletAddress?: string;
 }
 
 export interface MessageResponse {

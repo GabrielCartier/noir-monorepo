@@ -97,7 +97,16 @@ export class ApiClient {
   private isInitialized = false;
 
   constructor() {
-    this.app = new Elysia();
+    this.app = new Elysia()
+      .onRequest(({ set }) => {
+        // Add CORS headers to all responses
+        set.headers['Access-Control-Allow-Origin'] = '*';
+        set.headers['Access-Control-Allow-Methods'] =
+          'GET, POST, PUT, DELETE, OPTIONS';
+        set.headers['Access-Control-Allow-Headers'] =
+          'Content-Type, Authorization';
+      })
+      .options('*', () => new Response(null, { status: 204 }));
     this.agents = new Map();
     this.setupRoutes();
 

@@ -49,6 +49,7 @@ export const ChatContainer = () => {
           const response = await messagesService.send({
             name: address ?? '',
             text: `initialize user {walletAddress: ${address}, chainId: ${chain?.id}}`,
+            walletAddress: address ?? undefined,
           });
           const newMessages = processApiResponse(response);
           setMessages(newMessages);

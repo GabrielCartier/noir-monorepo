@@ -2,6 +2,7 @@ import { MockConversation } from '@/src/lib/constants/mock-conversation';
 import { useDemoStore } from '@/src/stores/demo-store';
 import type { BaseResponse, MessageRequest } from '@/src/types/api';
 import { clientEnv } from '../lib/config/client-env';
+import { getWalletUUID } from '../lib/utils';
 
 const API_URL = clientEnv.NEXT_PUBLIC_API_URL;
 
@@ -61,16 +62,17 @@ export const messagesService = {
       return getMockResponse();
     }
 
-    const response = await fetch(
-      `${API_URL}/416659f6-a8ab-4d90-87b5-fd5635ebe37d/message`,
-      {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(message),
+    const response = await fetch(`${API_URL}/message`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
       },
-    );
+      body: JSON.stringify({
+        ...message,
+        agentId: '416659f6-a8ab-4d90-87b5-fd5635ebe37d', // Default agent ID from README
+        userId: getWalletUUID(message.walletAddress), // Get persistent UUID for this wallet
+      }),
+    });
 
     if (!response.ok) {
       throw new Error('Failed to send message');

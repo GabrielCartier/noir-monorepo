@@ -14,10 +14,13 @@ export const processApiResponse = (response: BaseResponse): Message[] => {
   const messages: Message[] = [];
 
   for (const res of response) {
+    // If there's text but no action, or action is IGNORE, show as agent message
+    if (res.text && (!res.action || res.action === 'IGNORE')) {
+      messages.push({ type: 'agent', content: res.text });
+      continue;
+    }
+
     switch (res.action) {
-      case 'IGNORE':
-        messages.push({ type: 'agent', content: res.text });
-        break;
       case 'STRATEGY':
         if (res.content.success && res.content.strategy) {
           messages.push({
