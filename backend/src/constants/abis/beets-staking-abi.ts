@@ -1,4 +1,4 @@
-export const SONIC_STAKING_ABI = [
+export const BEETS_STAKING_ABI = [
   // Deposit function
   'function deposit(uint256 amount) external',
 

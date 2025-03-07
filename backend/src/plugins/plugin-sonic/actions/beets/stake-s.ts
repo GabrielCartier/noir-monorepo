@@ -11,6 +11,7 @@ import {
 } from '@elizaos/core';
 import { erc20Abi, parseUnits } from 'viem';
 import { z } from 'zod';
+import { getBeetsStakingService } from '../../../../services/beets-staking-service';
 import { ethereumAddressSchema } from '../../../../validators/ethereum';
 import {
   viemPublicClientSchema,
@@ -61,9 +62,6 @@ async function stakeS(
     const parsedParams = stakeSContentSchema.parse(params);
     const { userId, amount, agentAddress, publicClient, walletClient } =
       parsedParams;
-    const stakingAddress = params.runtime.getSetting(
-      'SONIC_STAKING_ADDRESS',
-    ) as `0x${string}`;
     const sTokenAddress = params.runtime.getSetting(
       'SONIC_TOKEN_ADDRESS',
     ) as `0x${string}`;
@@ -87,13 +85,19 @@ async function stakeS(
       throw new Error('Insufficient $S balance');
     }
 
+    // Initialize BeetsStakingService
+    const beetsStakingService = getBeetsStakingService(
+      publicClient,
+      walletClient,
+    );
+
     // 2. Approve Sonic Staking contract to spend $S
     const { request: approveRequest } = await publicClient.simulateContract({
       account: agentAddress,
       address: sTokenAddress,
       abi: erc20Abi,
       functionName: 'approve',
-      args: [stakingAddress, bigIntAmount],
+      args: [beetsStakingService.getContractAddress(), bigIntAmount],
     });
 
     const approveTx = await walletClient.writeContract({
@@ -102,43 +106,11 @@ async function stakeS(
     });
     await publicClient.waitForTransactionReceipt({ hash: approveTx });
 
-    // 3. Deposit $S and receive $stS
-    const { request: depositRequest } = await publicClient.simulateContract({
-      account: agentAddress,
-      address: stakingAddress,
-      abi: [
-        {
-          inputs: [],
-          name: 'deposit',
-          outputs: [{ name: '', type: 'uint256' }],
-          stateMutability: 'payable',
-          type: 'function',
-        },
-      ],
-      functionName: 'deposit',
-      value: bigIntAmount,
-    });
-
-    const depositTx = await walletClient.writeContract({
-      ...depositRequest,
-      account: walletClient.account,
-    });
+    // 3. Deposit $S and receive $stS using BeetsStakingService
+    const depositTx = await beetsStakingService.deposit(bigIntAmount);
 
     // 4. Get the amount of $stS received
-    const stsAmount = await publicClient.readContract({
-      address: stakingAddress,
-      abi: [
-        {
-          inputs: [{ name: 'amount', type: 'uint256' }],
-          name: 'getStsAmount',
-          outputs: [{ name: '', type: 'uint256' }],
-          stateMutability: 'view',
-          type: 'function',
-        },
-      ],
-      functionName: 'getStsAmount',
-      args: [bigIntAmount],
-    });
+    const stsAmount = await beetsStakingService.getStsAmount(bigIntAmount);
 
     elizaLogger.info('Successfully staked $S', {
       userId,

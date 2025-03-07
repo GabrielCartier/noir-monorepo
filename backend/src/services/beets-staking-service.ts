@@ -1,8 +1,8 @@
 import type { PublicClient, WalletClient } from 'viem';
 import { env } from '../config/env';
-import { SONIC_STAKING_ABI } from '../constants/abis/sonic-staking';
+import { BEETS_STAKING_ABI } from '../constants/abis/beets-staking-abi';
 
-export class SonicStakingService {
+export class BeetsStakingService {
   private readonly publicClient: PublicClient;
   private readonly walletClient: WalletClient;
 
@@ -19,7 +19,7 @@ export class SonicStakingService {
     const { request } = await this.publicClient.simulateContract({
       account: this.walletClient.account,
       address: env.SONIC_STAKING_ADDRESS,
-      abi: SONIC_STAKING_ABI,
+      abi: BEETS_STAKING_ABI,
       functionName: 'deposit',
       args: [amount],
     });
@@ -37,7 +37,7 @@ export class SonicStakingService {
   async getRewards(): Promise<bigint> {
     const rewards = (await this.publicClient.readContract({
       address: env.SONIC_STAKING_ADDRESS,
-      abi: SONIC_STAKING_ABI,
+      abi: BEETS_STAKING_ABI,
       functionName: 'getRewards',
     })) as bigint;
     return rewards;
@@ -47,7 +47,7 @@ export class SonicStakingService {
     const { request } = await this.publicClient.simulateContract({
       account: this.walletClient.account,
       address: env.SONIC_STAKING_ADDRESS,
-      abi: SONIC_STAKING_ABI,
+      abi: BEETS_STAKING_ABI,
       functionName: 'claimRewards',
     });
 
@@ -57,20 +57,20 @@ export class SonicStakingService {
   }
 }
 
-let sonicStakingServiceInstance: SonicStakingService | null = null;
+let beetsStakingServiceInstance: BeetsStakingService | null = null;
 
-export const getSonicStakingService = (
+export const getBeetsStakingService = (
   publicClient?: PublicClient,
   walletClient?: WalletClient,
-): SonicStakingService => {
-  if (!sonicStakingServiceInstance && publicClient && walletClient) {
-    sonicStakingServiceInstance = new SonicStakingService(
+): BeetsStakingService => {
+  if (!beetsStakingServiceInstance && publicClient && walletClient) {
+    beetsStakingServiceInstance = new BeetsStakingService(
       publicClient,
       walletClient,
     );
   }
-  if (!sonicStakingServiceInstance) {
-    throw new Error('SonicStakingService not initialized');
+  if (!beetsStakingServiceInstance) {
+    throw new Error('BeetsStakingService not initialized');
   }
-  return sonicStakingServiceInstance;
+  return beetsStakingServiceInstance;
 };

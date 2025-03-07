@@ -14,7 +14,11 @@ import { Input } from '@/src/components/ui/input';
 import { Label } from '@/src/components/ui/label';
 import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
-import { depositToVault } from '../../lib/services/vault-service';
+import { wrappedSonicAbi } from '../../lib/constants/abis/wrapped-sonic-abi';
+import {
+  WRAPPED_SONIC_ADDRESS,
+  depositToVault,
+} from '../../lib/services/vault-service';
 import type { DepositDialogProps } from '../../types/vault';
 import { useWallet } from '../providers/wallet-provider';
 
@@ -27,23 +31,71 @@ export function DepositDialog({
   const [isLoading, setIsLoading] = useState(false);
   const [amount, setAmount] = useState('');
   const [balance, setBalance] = useState<bigint | null>(null);
+  const [wrappedBalance, setWrappedBalance] = useState<bigint | null>(null);
+  const [hasWrappedTokens, setHasWrappedTokens] = useState(false);
   const { publicClient, ensureCorrectChain, walletClient } = useWallet();
 
   useEffect(() => {
     if (isOpen) {
-      checkBalance();
+      checkBalances();
     }
   }, [isOpen]);
 
-  const checkBalance = async () => {
+  const checkBalances = async () => {
     try {
-      const balance = await publicClient.getBalance({
+      // Check native S balance
+      const nativeBalance = await publicClient.getBalance({
         address: address as `0x${string}`,
       });
-      setBalance(balance);
+      setBalance(nativeBalance);
+
+      // Check wrapped S (wS) balance
+      const wrappedBalance = await publicClient.readContract({
+        address: WRAPPED_SONIC_ADDRESS as `0x${string}`,
+        abi: wrappedSonicAbi,
+        functionName: 'balanceOf',
+        args: [address as `0x${string}`],
+      });
+      setWrappedBalance(wrappedBalance);
+      setHasWrappedTokens(wrappedBalance > 0n);
     } catch (error) {
-      console.error('Error checking balance:', error);
-      toast.error('Failed to check balance');
+      console.error('Error checking balances:', error);
+      toast.error('Failed to check balances');
+    }
+  };
+
+  const handleSendWrappedTokens = async () => {
+    if (!walletClient || !wrappedBalance || wrappedBalance === 0n) {
+      return;
+    }
+
+    setIsLoading(true);
+    try {
+      await ensureCorrectChain();
+
+      // Send wrapped tokens to vault using withdrawTo
+      const { request: withdrawRequest } = await publicClient.simulateContract({
+        address: WRAPPED_SONIC_ADDRESS as `0x${string}`,
+        abi: wrappedSonicAbi,
+        functionName: 'withdrawTo',
+        args: [vaultAddress as `0x${string}`, wrappedBalance],
+        account: address as `0x${string}`,
+      });
+
+      const withdrawHash = await walletClient.writeContract({
+        ...withdrawRequest,
+        account: address as `0x${string}`,
+      });
+
+      await publicClient.waitForTransactionReceipt({ hash: withdrawHash });
+      toast.success('Successfully sent wrapped tokens to vault');
+      setHasWrappedTokens(false);
+      onDepositSuccess();
+    } catch (error) {
+      console.error('Error sending wrapped tokens:', error);
+      toast.error('Failed to send wrapped tokens to vault');
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -74,6 +126,10 @@ export function DepositDialog({
         return;
       }
 
+      toast.info(
+        'Please sign two transactions: first to wrap S tokens, then to send them to vault',
+      );
+
       await depositToVault({
         address,
         vaultAddress,
@@ -82,12 +138,12 @@ export function DepositDialog({
         amount: amountInWei,
       });
 
-      toast.success('Successfully wrapped S tokens and deposited to vault');
+      toast.success('Successfully deposited S tokens to vault');
       setIsOpen(false);
       onDepositSuccess();
 
-      // Refresh balance after successful deposit
-      checkBalance();
+      // Refresh balances after successful deposit
+      checkBalances();
     } catch (error) {
       console.error('Error depositing:', error);
       if (error instanceof Error) {
@@ -97,6 +153,11 @@ export function DepositDialog({
           toast.error('Insufficient funds for gas');
         } else if (error.message.includes('chain')) {
           toast.error('Please switch to the Sonic network to continue');
+        } else if (error.message.includes('ERC20WithdrawFailed')) {
+          toast.error(
+            'Failed to send tokens to vault. Your tokens are wrapped - you can try sending them separately.',
+          );
+          await checkBalances();
         } else {
           toast.error(error.message);
         }
@@ -120,8 +181,8 @@ export function DepositDialog({
           <DialogTitle>Deposit Sonic Tokens</DialogTitle>
           <DialogDescription>
             Enter the amount of Sonic tokens you want to deposit into your
-            vault. Your native S tokens will be automatically wrapped into wS
-            and deposited.
+            vault. This requires two transactions: first to wrap your S tokens,
+            then to send them to the vault.
           </DialogDescription>
         </DialogHeader>
         <div className="grid gap-4 py-4">
@@ -137,16 +198,28 @@ export function DepositDialog({
               step="0.000000000000000001"
             />
           </div>
-          {balance !== null && (
-            <p className="text-sm text-muted-foreground">
-              Available balance: {Number(balance) / 1e18} S
-            </p>
-          )}
+          <div className="text-sm text-muted-foreground space-y-1">
+            {balance !== null && (
+              <p>Available S balance: {Number(balance) / 1e18} S</p>
+            )}
+            {wrappedBalance !== null && wrappedBalance > 0n && (
+              <p>Wrapped S balance: {Number(wrappedBalance) / 1e18} wS</p>
+            )}
+          </div>
         </div>
-        <DialogFooter>
+        <DialogFooter className="flex flex-col gap-2">
           <Button onClick={handleDeposit} disabled={isLoading}>
-            {isLoading ? 'Depositing...' : 'Deposit'}
+            {isLoading ? 'Processing...' : 'Deposit'}
           </Button>
+          {hasWrappedTokens && (
+            <Button
+              onClick={handleSendWrappedTokens}
+              variant="secondary"
+              disabled={isLoading}
+            >
+              Send Wrapped Tokens to Vault
+            </Button>
+          )}
         </DialogFooter>
       </DialogContent>
     </Dialog>

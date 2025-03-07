@@ -90,22 +90,55 @@ export async function depositToVault({
   walletClient: WalletClient;
   amount: bigint;
 }) {
-  // First wrap the S tokens into wS and deposit directly to vault
-  const { request } = await publicClient.simulateContract({
+  // First wrap the S tokens to self (deposit)
+  const { request: depositRequest } = await publicClient.simulateContract({
     address: WRAPPED_SONIC_ADDRESS as `0x${string}`,
     abi: wrappedSonicAbi,
-    functionName: 'depositFor',
-    args: [vaultAddress as `0x${string}`],
+    functionName: 'deposit',
     value: amount,
     account: address as `0x${string}`,
   });
 
-  const hash = await walletClient.writeContract({
-    ...request,
+  const depositHash = await walletClient.writeContract({
+    ...depositRequest,
     account: address as `0x${string}`,
   });
 
-  await publicClient.waitForTransactionReceipt({ hash });
+  // Wait for the deposit transaction to complete
+  await publicClient.waitForTransactionReceipt({ hash: depositHash });
+
+  // Approve the contract to spend our wrapped tokens
+  const { request: approveRequest } = await publicClient.simulateContract({
+    address: WRAPPED_SONIC_ADDRESS as `0x${string}`,
+    abi: wrappedSonicAbi,
+    functionName: 'approve',
+    args: [WRAPPED_SONIC_ADDRESS as `0x${string}`, amount],
+    account: address as `0x${string}`,
+  });
+
+  const approveHash = await walletClient.writeContract({
+    ...approveRequest,
+    account: address as `0x${string}`,
+  });
+
+  // Wait for the approval transaction to complete
+  await publicClient.waitForTransactionReceipt({ hash: approveHash });
+
+  // Then unwrap the wrapped tokens directly to the vault address
+  const { request: withdrawRequest } = await publicClient.simulateContract({
+    address: WRAPPED_SONIC_ADDRESS as `0x${string}`,
+    abi: wrappedSonicAbi,
+    functionName: 'withdrawTo',
+    args: [vaultAddress as `0x${string}`, amount],
+    account: address as `0x${string}`,
+  });
+
+  const withdrawHash = await walletClient.writeContract({
+    ...withdrawRequest,
+    account: address as `0x${string}`,
+  });
+
+  await publicClient.waitForTransactionReceipt({ hash: withdrawHash });
 }
 
 export async function withdrawFromVault({
