@@ -12,42 +12,32 @@ import {
 } from '@/src/components/ui/dialog';
 import { Input } from '@/src/components/ui/input';
 import { Label } from '@/src/components/ui/label';
-import { useEffect, useState } from 'react';
+import { withdrawFromVault } from '@/src/lib/services/vault-service';
+import { useState } from 'react';
 import { toast } from 'sonner';
-import { depositToVault } from '../../lib/services/vault-service';
-import type { DepositDialogProps } from '../../types/vault';
 import { useWallet } from '../providers/wallet-provider';
 
-export function DepositDialog({
+interface WithdrawDialogProps {
+  address: `0x${string}`;
+  vaultAddress: `0x${string}`;
+  maxAmount?: string;
+  onWithdrawSuccess?: () => void;
+  disabled?: boolean;
+}
+
+export function WithdrawDialog({
   address,
   vaultAddress,
-  onDepositSuccess,
-}: Omit<DepositDialogProps, 'publicClient' | 'walletClient'>) {
+  maxAmount,
+  onWithdrawSuccess,
+  disabled,
+}: WithdrawDialogProps) {
   const [isOpen, setIsOpen] = useState(false);
-  const [isLoading, setIsLoading] = useState(false);
   const [amount, setAmount] = useState('');
-  const [balance, setBalance] = useState<bigint | null>(null);
+  const [isLoading, setIsLoading] = useState(false);
   const { publicClient, ensureCorrectChain, walletClient } = useWallet();
 
-  useEffect(() => {
-    if (isOpen) {
-      checkBalance();
-    }
-  }, [isOpen]);
-
-  const checkBalance = async () => {
-    try {
-      const balance = await publicClient.getBalance({
-        address: address as `0x${string}`,
-      });
-      setBalance(balance);
-    } catch (error) {
-      console.error('Error checking balance:', error);
-      toast.error('Failed to check balance');
-    }
-  };
-
-  const handleDeposit = async () => {
+  const handleWithdraw = async () => {
     if (!amount || Number.isNaN(Number(amount)) || Number(amount) <= 0) {
       toast.error('Please enter a valid amount');
       return;
@@ -66,27 +56,29 @@ export function DepositDialog({
       // Convert amount to wei (18 decimals)
       const amountInWei = BigInt(Math.floor(Number(amount) * 1e18));
 
-      // Check if user has sufficient balance
-      if (balance && balance < amountInWei) {
+      // Check if amount is within available balance
+      if (
+        maxAmount &&
+        BigInt(Math.floor(Number(maxAmount) * 1e18)) < amountInWei
+      ) {
         toast.error(
-          `Insufficient Sonic token balance. You have ${balance.toString()} S, but need ${amountInWei.toString()} S`,
+          `Insufficient vault balance. You have ${maxAmount} S available to withdraw.`,
         );
         return;
       }
 
-      await depositToVault({
+      await withdrawFromVault({
         address,
         vaultAddress,
         publicClient,
         walletClient,
         amount: amountInWei,
       });
-
-      toast.success('Deposit successful');
+      toast.success('Withdrawal successful');
       setIsOpen(false);
-      onDepositSuccess();
+      onWithdrawSuccess?.();
     } catch (error) {
-      console.error('Error depositing:', error);
+      console.error('Error withdrawing:', error);
       if (error instanceof Error) {
         if (error.message.includes('User rejected')) {
           toast.error('Transaction rejected by user');
@@ -98,7 +90,7 @@ export function DepositDialog({
           toast.error(error.message);
         }
       } else {
-        toast.error('Failed to deposit');
+        toast.error('Failed to withdraw');
       }
     } finally {
       setIsLoading(false);
@@ -108,40 +100,47 @@ export function DepositDialog({
   return (
     <Dialog open={isOpen} onOpenChange={setIsOpen}>
       <DialogTrigger asChild={true}>
-        <Button variant="outline" className="w-full">
-          Deposit
+        <Button
+          variant="outline"
+          className="w-full"
+          disabled={disabled || !maxAmount}
+        >
+          Withdraw
         </Button>
       </DialogTrigger>
-      <DialogContent>
+      <DialogContent className="sm:max-w-[425px]">
         <DialogHeader>
-          <DialogTitle>Deposit Sonic Tokens</DialogTitle>
+          <DialogTitle>Withdraw from Vault</DialogTitle>
           <DialogDescription>
-            Enter the amount of Sonic tokens you want to deposit into your
-            vault.
+            Enter the amount you want to withdraw from your vault.
           </DialogDescription>
         </DialogHeader>
         <div className="grid gap-4 py-4">
           <div className="grid gap-2">
-            <Label htmlFor="amount">Amount (S)</Label>
+            <Label htmlFor="amount">Amount</Label>
             <Input
               id="amount"
               type="number"
-              placeholder="Enter amount"
               value={amount}
               onChange={(e) => setAmount(e.target.value)}
+              placeholder="Enter amount"
+              max={maxAmount}
               min="0"
               step="0.000000000000000001"
             />
+            {maxAmount && (
+              <p className="text-sm text-muted-foreground">
+                Available: {maxAmount} S
+              </p>
+            )}
           </div>
-          {balance !== null && (
-            <p className="text-sm text-muted-foreground">
-              Available balance: {Number(balance) / 1e18} S
-            </p>
-          )}
         </div>
         <DialogFooter>
-          <Button onClick={handleDeposit} disabled={isLoading}>
-            {isLoading ? 'Depositing...' : 'Deposit'}
+          <Button
+            onClick={handleWithdraw}
+            disabled={!amount || isLoading || Number(amount) <= 0}
+          >
+            {isLoading ? 'Withdrawing...' : 'Withdraw'}
           </Button>
         </DialogFooter>
       </DialogContent>

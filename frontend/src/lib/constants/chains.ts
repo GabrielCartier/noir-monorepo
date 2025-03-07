@@ -1,7 +1,7 @@
 import { defineChain } from 'viem';
 
 export const sonic = defineChain({
-  id: 1,
+  id: 146,
   name: 'Sonic',
   network: 'sonic',
   nativeCurrency: {

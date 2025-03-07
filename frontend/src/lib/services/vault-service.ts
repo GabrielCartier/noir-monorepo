@@ -104,7 +104,18 @@ export async function depositToVault({
       args: [vaultAddress, amount],
     });
 
-    const approveHash = await walletClient.writeContract(approveRequest);
+    const approveHash = await walletClient.writeContract({
+      address: approveRequest.address,
+      abi: approveRequest.abi,
+      functionName: approveRequest.functionName,
+      args: approveRequest.args,
+      account: approveRequest.account,
+      chain: null,
+      type: 'eip1559',
+      maxFeePerGas: BigInt(1000000000), // 1 Gwei
+      maxPriorityFeePerGas: BigInt(100000000), // 0.1 Gwei
+      gas: BigInt(210000), // Standard gas limit for ERC20 operations
+    });
     const approveReceipt = await publicClient.waitForTransactionReceipt({
       hash: approveHash,
       confirmations: 1,
@@ -124,7 +135,18 @@ export async function depositToVault({
     args: [SONIC.address as `0x${string}`, amount],
   });
 
-  const depositHash = await walletClient.writeContract(depositRequest);
+  const depositHash = await walletClient.writeContract({
+    address: depositRequest.address,
+    abi: depositRequest.abi,
+    functionName: depositRequest.functionName,
+    args: depositRequest.args,
+    account: depositRequest.account,
+    chain: null,
+    type: 'eip1559',
+    maxFeePerGas: BigInt(1000000000), // 1 Gwei
+    maxPriorityFeePerGas: BigInt(100000000), // 0.1 Gwei
+    gas: BigInt(210000), // Standard gas limit for ERC20 operations
+  });
   const depositReceipt = await publicClient.waitForTransactionReceipt({
     hash: depositHash,
     confirmations: 1,

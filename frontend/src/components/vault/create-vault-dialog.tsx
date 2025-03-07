@@ -85,7 +85,7 @@ export function CreateVaultDialog({ onVaultCreated }: CreateVaultDialogProps) {
   return (
     <Dialog open={isOpen} onOpenChange={setIsOpen}>
       <DialogTrigger asChild={true}>
-        <Button variant="outline">Create Vault</Button>
+        {address && <Button variant="outline">Create Vault</Button>}
       </DialogTrigger>
       <DialogContent>
         <DialogHeader>
@@ -146,7 +146,12 @@ export function CreateVaultDialog({ onVaultCreated }: CreateVaultDialogProps) {
               )}
             </>
           ) : (
-            <WalletConnectButton />
+            <div className="flex flex-col items-center gap-4">
+              <p className="text-sm text-muted-foreground">
+                Please connect your wallet to create a vault
+              </p>
+              <WalletConnectButton />
+            </div>
           )}
         </div>
         <DialogFooter>

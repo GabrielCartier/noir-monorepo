@@ -5,7 +5,6 @@ import { ChatBox } from 'src/components/chat/chat-box';
 import { ChatInfo } from 'src/components/chat/chat-info';
 import { ChatMessage } from 'src/components/chat/chat-message';
 import { ChatMessagesContainer } from 'src/components/chat/chat-messages-container';
-import { ChatStatusBar } from 'src/components/chat/chat-status-bar';
 import { OpportunityMessage } from 'src/components/chat/opportunity-message';
 import { StrategyMessage } from 'src/components/chat/strategy-message';
 import { TransactionMessage } from 'src/components/chat/transaction-message';
@@ -13,7 +12,6 @@ import { VaultDetailsMessage } from 'src/components/chat/vault-details-message';
 import { processApiResponse } from 'src/lib/message-processor';
 import { cn } from 'src/lib/utils';
 import { messagesService } from 'src/services/messages';
-import { useDemoStore } from 'src/stores/demo-store';
 import type { Message } from 'src/types/messages';
 
 export const ChatContainer = () => {
@@ -21,48 +19,13 @@ export const ChatContainer = () => {
   const [messages, setMessages] = useState<Message[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [mounted, setMounted] = useState(false);
-  const { address, isConnecting } = useWallet();
-  const { isDemoMode } = useDemoStore();
+  const { address } = useWallet();
   const hasInitialized = useRef(false);
 
   // Handle mounting state
   useEffect(() => {
     setMounted(true);
   }, []);
-
-  // Initialize conversation when expanded for the first time
-  useEffect(() => {
-    if (!mounted) {
-      return;
-    }
-
-    const initializeConversation = async () => {
-      if (
-        (address || isDemoMode) &&
-        isExpanded &&
-        !hasInitialized.current &&
-        messages.length === 0
-      ) {
-        hasInitialized.current = true;
-        setIsLoading(true);
-        try {
-          const response = await messagesService.send({
-            name: address ?? '',
-            text: `initialize user {walletAddress: ${address}}`,
-            walletAddress: address ?? undefined,
-          });
-          const newMessages = processApiResponse(response);
-          setMessages(newMessages);
-        } catch (error) {
-          console.error('Failed to initialize conversation:', error);
-        } finally {
-          setIsLoading(false);
-        }
-      }
-    };
-
-    initializeConversation();
-  }, [address, isDemoMode, messages.length, isExpanded, mounted]);
 
   const handleSendMessage = async (text: string) => {
     // Add user message
@@ -73,8 +36,12 @@ export const ChatContainer = () => {
     try {
       const response = await messagesService.send({
         name: address ?? '',
-        text,
+        text: hasInitialized.current ? text : `Hello! ${text}`,
+        walletAddress: hasInitialized.current
+          ? undefined
+          : (address ?? undefined),
       });
+      hasInitialized.current = true;
 
       // Process all messages from the response
       const newMessages = processApiResponse(response);
@@ -90,12 +57,6 @@ export const ChatContainer = () => {
     }
   };
 
-  const status = isConnecting
-    ? 'connecting'
-    : address
-      ? 'connected'
-      : 'disconnected';
-
   // Don't render anything until mounted to prevent hydration issues
   if (!mounted) {
     return null;
@@ -105,18 +66,6 @@ export const ChatContainer = () => {
     <div className="flex flex-col h-screen">
       {/* Status Bar */}
       <div className="relative h-[calc(100vh-4rem)]">
-        <div
-          className={cn(
-            'fixed top-16 left-0 right-0 z-30', // Changed to fixed positioning
-            'transition-all duration-300 transform',
-            isExpanded
-              ? 'translate-y-0 opacity-100'
-              : '-translate-y-full opacity-0 pointer-events-none',
-          )}
-        >
-          <ChatStatusBar status={status} />
-        </div>
-
         <div className="z-20 relative">
           <ChatMessagesContainer isExpanded={isExpanded} isLoading={isLoading}>
             {messages.map((msg, index) => {

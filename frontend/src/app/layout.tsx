@@ -1,3 +1,6 @@
+'use client';
+
+import { Header } from '@/src/components/header';
 import { Toaster } from '@/src/components/ui/toaster';
 import { Inter } from 'next/font/google';
 import './globals.css';
@@ -21,8 +24,11 @@ export default function RootLayout({
           storageKey="options-theme"
         >
           <WalletProvider>
-            {children}
-            <Toaster />
+            <div className="min-h-screen bg-background">
+              <Header />
+              <main>{children}</main>
+              <Toaster />
+            </div>
           </WalletProvider>
         </ThemeProvider>
       </body>
