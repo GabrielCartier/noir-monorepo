@@ -1,6 +1,7 @@
-import type { Address } from 'viem';
-
 export interface MessageMetadata {
-  walletAddress?: Address;
-  [key: string]: unknown;
+  walletAddress?: string;
+  amount?: string;
+  vaultAddress?: string;
+  transactionHash?: string;
+  action?: string;
 }

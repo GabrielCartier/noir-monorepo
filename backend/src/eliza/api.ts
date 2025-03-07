@@ -316,9 +316,9 @@ export class ApiClient {
       await agent.evaluate(memory, state);
 
       // Check if we should suppress the initial message
-      const action = agent.actions.find((a) => a.name === response.action);
+      // const action = agent.actions.find((a) => a.name === response.action);
       // TODO Handle this
-      const shouldSuppressInitialMessage = action?.suppressInitialMessage;
+      // const shouldSuppressInitialMessage = action?.suppressInitialMessage;
 
       // Include the response content even if no actions were processed
       const responseContent = message ? [message] : [response];
