@@ -1,0 +1,288 @@
+import {
+  type Action,
+  type HandlerCallback,
+  type IAgentRuntime,
+  type Memory,
+  ModelClass,
+  type State,
+  composeContext,
+  elizaLogger,
+  generateObject,
+} from '@elizaos/core';
+import { erc20Abi, parseUnits } from 'viem';
+import { z } from 'zod';
+import { ethereumAddressSchema } from '../../../../validators/ethereum';
+import {
+  viemPublicClientSchema,
+  viemWalletClientSchema,
+} from '../../../../validators/viem';
+import { VAULT_ABI } from '../../constants';
+import { initSonicProvider } from '../../providers/sonic';
+import { deposit as depositSilo } from '../../services/silo-service';
+import { findValidVaultsTemplate } from '../../templates/silo-deposit-template';
+import type { MessageMetadata } from '../../types/message-metadata';
+
+const depositContentSchema = z.object({
+  siloAddress: ethereumAddressSchema,
+  tokenAddress: ethereumAddressSchema,
+  amount: z.number(),
+  userVaultAddress: ethereumAddressSchema,
+  userId: z.string().uuid(),
+});
+
+const extendedDepositContentSchema = depositContentSchema.extend({
+  publicClient: viemPublicClientSchema,
+  walletClient: viemWalletClientSchema,
+});
+type DepositContent = z.infer<typeof depositContentSchema>;
+type ExtendedDepositContent = z.infer<typeof extendedDepositContentSchema>;
+
+async function deposit(params: ExtendedDepositContent) {
+  const {
+    walletClient,
+    publicClient,
+    siloAddress,
+    tokenAddress,
+    userVaultAddress,
+    amount,
+    userId,
+  } = params;
+  const agentAddress = walletClient.account?.address;
+  if (!agentAddress) {
+    return {
+      success: false,
+      error: 'Agent address is not set',
+    };
+  }
+  // First check if the agent has authorization over the vault
+  const agentRoles = await publicClient.readContract({
+    address: userVaultAddress,
+    abi: VAULT_ABI,
+    functionName: 'rolesOf',
+    args: [agentAddress],
+  });
+
+  if (agentRoles !== 1n) {
+    return {
+      success: false,
+      error: 'Agent cannot operate this vault',
+    };
+  }
+
+  const decimals = await publicClient.readContract({
+    address: tokenAddress,
+    abi: erc20Abi,
+    functionName: 'decimals',
+  });
+
+  const bigIntAmount = parseUnits(amount.toString(), decimals);
+
+  const { transactionHash, success, error } = await depositSilo({
+    publicClient,
+    walletClient,
+    siloAddress,
+    vaultAddress: userVaultAddress,
+    amount: bigIntAmount,
+    tokenAddress,
+    userId,
+  });
+
+  return {
+    success,
+    transactionHash: transactionHash,
+    error,
+  };
+}
+
+export const depositAction: Action = {
+  name: 'DEPOSIT',
+  description:
+    'Deposits assets into a Silo vault using ERC4626 deposit function',
+  similes: [
+    'DEPOSIT_ASSETS',
+    'ADD_LIQUIDITY',
+    'STORE_ASSETS',
+    'LOCK_ASSETS',
+    'PROVIDE_LIQUIDITY',
+  ],
+  examples: [
+    [
+      {
+        user: '{{user1}}',
+        content: {
+          text: 'Deposit 1 wstETH into Silo vault',
+          action: 'DEPOSIT',
+        },
+      },
+      {
+        user: '{{agentName}}',
+        content: {
+          text: 'Successfully deposited 1 wstETH into Silo vault',
+          action: 'DEPOSIT',
+        },
+      },
+    ],
+  ],
+  // TODO Probably need to validate that we have the silo vaults data loaded
+  validate: async (runtime: IAgentRuntime, message: Memory) => {
+    elizaLogger.log('Validating silo deposit...');
+    const vaultFactoryAddress = runtime.getSetting('VAULT_FACTORY_ADDRESS');
+    if (!vaultFactoryAddress) {
+      return false;
+    }
+    const rpcUrl = runtime.getSetting('SONIC_RPC_URL');
+    if (!rpcUrl) {
+      return false;
+    }
+    const privateKey = runtime.getSetting('EVM_PRIVATE_KEY') as `0x${string}`;
+    if (!privateKey) {
+      return false;
+    }
+    const metadata = message.content.metadata as MessageMetadata;
+    const walletAddress = metadata?.walletAddress;
+    if (!walletAddress) {
+      return false;
+    }
+    return true;
+  },
+  handler: async (
+    runtime: IAgentRuntime,
+    message: Memory,
+    state?: State,
+    _options?: {
+      [key: string]: unknown;
+    },
+    callback?: HandlerCallback,
+  ) => {
+    try {
+      elizaLogger.log('Silo Deposit action handler called');
+      const currentState = state
+        ? await runtime.updateRecentMessageState(state)
+        : await runtime.composeState(message);
+
+      // Extract wallet address from message metadata
+      const metadata = message.content.metadata as MessageMetadata;
+      const walletAddress = metadata?.walletAddress;
+      // Should not happen, it is validated
+      if (!walletAddress) {
+        elizaLogger.error('No wallet address provided in message metadata');
+        if (callback) {
+          callback({
+            text: 'Error: No wallet address provided',
+          });
+        }
+        return false;
+      }
+
+      console.log('Generating context...');
+      const sonicProvider = await initSonicProvider(runtime);
+      const context = composeContext({
+        state: currentState,
+        template: findValidVaultsTemplate,
+      });
+
+      console.log('Generating object...');
+      const content = await generateObject({
+        runtime,
+        context,
+        modelClass: ModelClass.LARGE,
+        schema: z
+          .object({
+            vaults: z.array(
+              z.object({
+                siloAddress: ethereumAddressSchema,
+                configAddress: ethereumAddressSchema,
+                apy: z.number(),
+                tokenAddress: ethereumAddressSchema,
+              }),
+            ),
+            amount: z.number(),
+          })
+          .or(z.object({ error: z.string() })),
+      });
+
+      console.log(`Silo deposit content is ${JSON.stringify(content)}`);
+
+      type VaultResponse = {
+        vaults?: Array<{
+          siloAddress: `0x${string}`;
+          configAddress: `0x${string}`;
+          apy: number;
+          tokenAddress: `0x${string}`;
+        }>;
+        amount?: number;
+        error?: string;
+      };
+
+      const response = content.object as VaultResponse;
+
+      if (response.error) {
+        if (callback) {
+          callback({
+            text: response.error,
+          });
+        }
+        return false;
+      }
+
+      if (!response.vaults || response.vaults.length === 0) {
+        if (callback) {
+          callback({
+            text: 'No vaults found for the specified token',
+          });
+        }
+        return false;
+      }
+
+      if (!response.amount) {
+        if (callback) {
+          callback({
+            text: 'Could not determine the amount to deposit',
+          });
+        }
+        return false;
+      }
+
+      const depositContent = {
+        siloAddress: response.vaults[0].siloAddress,
+        tokenAddress: response.vaults[0].tokenAddress,
+        amount: response.amount,
+        userVaultAddress: walletAddress as `0x${string}`,
+        userId: message.userId,
+      };
+
+      const depositResponse = await deposit({
+        ...depositContent,
+        publicClient: sonicProvider.getPublicClient(),
+        walletClient: sonicProvider.getWalletClient(),
+      });
+
+      if (callback) {
+        callback({
+          text: `Successfully deposited ${depositContent.amount} tokens to ${depositContent.siloAddress}\nTransaction Hash: ${depositResponse.transactionHash}`,
+          content: {
+            success: true,
+            hash: depositResponse.transactionHash,
+            recipient: depositContent.siloAddress,
+            action: 'DEPOSIT',
+          },
+        });
+      }
+      return true;
+    } catch (error) {
+      console.error(
+        'Error in silo deposit:',
+        error instanceof Error ? error.message : 'Unknown error',
+      );
+      if (callback) {
+        callback({
+          text:
+            error instanceof Error
+              ? error.message
+              : 'Failed to deposit to silo',
+        });
+      }
+      return false;
+    }
+  },
+};

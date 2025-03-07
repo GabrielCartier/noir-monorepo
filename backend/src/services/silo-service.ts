@@ -1,7 +1,7 @@
 import { elizaLogger } from '@elizaos/core';
 import {} from 'viem';
 import { viemPublicClient } from '../config/viem-public-client';
-import { SILO_CONFIG_ABI } from '../constants/silo-config-abi';
+import { SILO_CONFIG_ABI } from '../constants/abis/silo-config-abi';
 import type {
   ExtendedSiloMarketsResponse,
   SiloMarketsResponse,

@@ -357,7 +357,6 @@ export const initSonicProvider = (runtime: IAgentRuntime) => {
     vaultFactoryAddress,
   );
 };
-
 const sonicProvider: Provider = {
   get: async (
     runtime: IAgentRuntime,
@@ -365,7 +364,7 @@ const sonicProvider: Provider = {
     _state?: State,
   ): Promise<string | null> => {
     try {
-      const userAddress = getUserAddress(message);
+      const userAddress = getUserAddress(message) as `0x${string}`;
       return await formatSonicContext(runtime, userAddress);
     } catch (error) {
       console.error('Error in Sonic provider:', error);
