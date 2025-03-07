@@ -72,6 +72,19 @@ export function VaultValue() {
     checkVaultStatus();
   }, [checkVaultStatus]);
 
+  const formatBalance = (balance: string | undefined) => {
+    if (!balance) {
+      return '0';
+    }
+    // Convert balance from wei (18 decimals) to S
+    const balanceNumber = Number(BigInt(balance)) / 1e18;
+    // Format with up to 6 decimal places, removing trailing zeros
+    return balanceNumber.toLocaleString('en-US', {
+      maximumFractionDigits: 6,
+      minimumFractionDigits: 0,
+    });
+  };
+
   if (isLoading) {
     return (
       <Card>
@@ -143,7 +156,7 @@ export function VaultValue() {
         <div>
           <div className="flex items-baseline gap-2">
             <span className="text-3xl font-bold">
-              {vaultStatus.balance || '0'} S
+              {formatBalance(vaultStatus.balance)} S
             </span>
             <span className="ml-2 rounded-full bg-green-500/10 px-2 py-0.5 text-xs text-green-500">
               +21%
@@ -151,10 +164,16 @@ export function VaultValue() {
           </div>
           <p className="mt-1 text-sm text-muted-foreground">
             Vault:{' '}
-            <code className="bg-muted px-1 py-0.5 rounded">
-              {vaultAddress.slice(0, 6)}...
-              {vaultAddress.slice(-4)}
-            </code>
+            <a
+              href={`https://sonicscan.org/address/${vaultAddress}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="hover:underline"
+            >
+              <code className="bg-muted px-1 py-0.5 rounded">
+                {vaultAddress.slice(0, 6)}...{vaultAddress.slice(-4)}
+              </code>
+            </a>
           </p>
         </div>
         <div className="flex gap-2">

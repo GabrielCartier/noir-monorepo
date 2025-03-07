@@ -69,7 +69,7 @@ export function DepositDialog({
       // Check if user has sufficient balance
       if (balance && balance < amountInWei) {
         toast.error(
-          `Insufficient Sonic token balance. You have ${balance.toString()} S, but need ${amountInWei.toString()} S`,
+          `Insufficient Sonic token balance. You have ${Number(balance) / 1e18} S, but need ${amount} S`,
         );
         return;
       }
@@ -82,9 +82,12 @@ export function DepositDialog({
         amount: amountInWei,
       });
 
-      toast.success('Deposit successful');
+      toast.success('Successfully wrapped S tokens and deposited to vault');
       setIsOpen(false);
       onDepositSuccess();
+
+      // Refresh balance after successful deposit
+      checkBalance();
     } catch (error) {
       console.error('Error depositing:', error);
       if (error instanceof Error) {
@@ -117,7 +120,8 @@ export function DepositDialog({
           <DialogTitle>Deposit Sonic Tokens</DialogTitle>
           <DialogDescription>
             Enter the amount of Sonic tokens you want to deposit into your
-            vault.
+            vault. Your native S tokens will be automatically wrapped into wS
+            and deposited.
           </DialogDescription>
         </DialogHeader>
         <div className="grid gap-4 py-4">

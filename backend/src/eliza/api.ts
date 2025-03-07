@@ -22,6 +22,7 @@ import {
   createVault,
   getVault,
   getVaultBalance,
+  withdrawFromVault,
 } from '../services/vault-service';
 
 export const messageHandlerTemplate =
@@ -274,6 +275,75 @@ export class ApiClient {
         });
       } catch (error) {
         elizaLogger.error('[ApiClient] Error creating vault:', error);
+        return Response.json(
+          {
+            error:
+              error instanceof Error ? error.message : 'Unknown error occurred',
+          },
+          { status: 500 },
+        );
+      }
+    });
+
+    this.app.post('/vault/withdraw', async (context) => {
+      try {
+        elizaLogger.info('[ApiClient] Vault withdrawal endpoint called');
+        const body = context.body as {
+          walletAddress: string;
+          vaultAddress: string;
+          amount: string;
+        };
+
+        if (!body.walletAddress || !body.vaultAddress || !body.amount) {
+          elizaLogger.error(
+            '[ApiClient] Missing required parameters in withdrawal request',
+          );
+          return Response.json(
+            { error: 'Missing required parameters' },
+            { status: 400 },
+          );
+        }
+
+        // Get the first agent since we need its runtime
+        const firstAgent = Array.from(this.agents.values())[0];
+        if (!firstAgent) {
+          elizaLogger.error(
+            '[ApiClient] No agent available for vault withdrawal',
+          );
+          return Response.json(
+            { error: 'No agent available' },
+            { status: 500 },
+          );
+        }
+
+        // Initialize the Sonic provider to get properly configured clients
+        const sonicProvider = await initSonicProvider(firstAgent);
+        const publicClient = sonicProvider.getPublicClient();
+        const walletClient = sonicProvider.getWalletClient();
+
+        const response = await withdrawFromVault({
+          publicClient,
+          walletClient,
+          vaultAddress: body.vaultAddress as `0x${string}`,
+          tokenAddress:
+            '0x039e2fB66102314Ce7b64Ce5Ce3E5183bc94aD38' as `0x${string}`, // Wrapped Sonic address
+          amount: BigInt(body.amount),
+          userAddress: body.walletAddress as `0x${string}`,
+        });
+
+        if (!response.success) {
+          return Response.json(
+            { error: response.error || 'Failed to withdraw from vault' },
+            { status: 500 },
+          );
+        }
+
+        return Response.json({
+          success: true,
+          transactionHash: response.transactionHash,
+        });
+      } catch (error) {
+        elizaLogger.error('[ApiClient] Error processing withdrawal:', error);
         return Response.json(
           {
             error:

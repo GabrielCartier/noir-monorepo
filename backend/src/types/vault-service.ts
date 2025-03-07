@@ -6,16 +6,23 @@ export interface VaultServiceParams {
   vaultAddress: Address;
 }
 
-export interface TokenParams extends VaultServiceParams {
-  tokenAddress: Address;
+export interface TokenParams {
+  publicClient: PublicClient;
+  walletClient: WalletClient;
+  vaultAddress: `0x${string}`;
+  tokenAddress: `0x${string}`;
   amount: bigint;
+}
+
+export interface WithdrawParams extends TokenParams {
+  userAddress: `0x${string}`;
 }
 
 export interface GetVaultParams {
   publicClient: PublicClient;
   walletClient: WalletClient;
-  userAddress: Address;
-  vaultFactoryAddress: Address;
+  vaultFactoryAddress: `0x${string}`;
+  userAddress: `0x${string}`;
 }
 
 export interface VaultBalanceResponse {
@@ -24,6 +31,6 @@ export interface VaultBalanceResponse {
 
 export interface VaultTransactionResponse {
   success: boolean;
-  transactionHash?: Address;
+  transactionHash?: string;
   error?: string;
 }
