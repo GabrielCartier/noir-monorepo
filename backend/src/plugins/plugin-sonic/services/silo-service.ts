@@ -1,6 +1,6 @@
+import { withdrawFromVault } from '../../../services/vault-service';
 import { SILO_ABI } from '../constants/silo-abi';
 import type { BaseParams, DepositParams } from '../types/silo-service';
-import { withdrawFromVault } from './vault-service';
 
 export async function withdrawAll(params: BaseParams) {
   const { walletClient, publicClient, siloAddress, vaultAddress } = params;

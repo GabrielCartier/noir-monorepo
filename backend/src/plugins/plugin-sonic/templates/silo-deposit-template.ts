@@ -80,7 +80,8 @@ Otherwise return:
         "configAddress": string,
         "apy": number,
         "tokenAddress": string
-    }]
+    }],
+    "amount": number
 }
 \`\`\`
 `;

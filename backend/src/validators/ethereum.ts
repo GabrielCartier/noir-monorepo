@@ -6,9 +6,10 @@ import { z } from 'zod';
  */
 export const ethereumAddressSchema = z
   .string()
-  .refine((value) => isAddress(value), {
-    message: 'Invalid address format',
-  });
+  .refine(
+    (val) => /^0x[a-fA-F0-9]{40}$/.test(val),
+    'Invalid Ethereum address format',
+  );
 
 /**
  * Checks if a string is a valid Ethereum address

@@ -264,7 +264,7 @@ const formatSonicContext = async (
   // Get user-specific knowledge filtered by wallet address
   const userKnowledge = await runtime.databaseAdapter.getKnowledge({
     agentId: runtime.agentId,
-    limit: 10, // Limit to most recent 10 items
+    limit: 100, // Limit to most recent 100 items
     query: `content->'metadata'->>'walletAddress' = '${userAddress}' AND content->'metadata'->>'type' = 'vault_info'`,
   });
 
@@ -357,7 +357,6 @@ export const initSonicProvider = (runtime: IAgentRuntime) => {
     vaultFactoryAddress,
   );
 };
-
 const sonicProvider: Provider = {
   get: async (
     runtime: IAgentRuntime,
@@ -365,7 +364,7 @@ const sonicProvider: Provider = {
     _state?: State,
   ): Promise<string | null> => {
     try {
-      const userAddress = getUserAddress(message);
+      const userAddress = getUserAddress(message) as `0x${string}`;
       return await formatSonicContext(runtime, userAddress);
     } catch (error) {
       console.error('Error in Sonic provider:', error);

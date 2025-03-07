@@ -7,6 +7,5 @@ import { createYieldRoutes } from '../controllers/yield-controller';
 export function configureApiRoutes(app: Elysia): Elysia {
   // Add yield routes
   app.use(createYieldRoutes());
-
   return app;
 }

@@ -25,25 +25,19 @@ contract Vault is OwnableRoles, ReentrancyGuard {
         emit VaultCreated(address(this), owner);
     }
 
-    function deposit(address token, uint256 amount)
-        external
-        nonReentrant
-        notPaused
-        onlyOwnerOrRoles(AGENT_ROLE)
-        amountNotZero(amount)
-    {
+    function deposit(
+        address token,
+        uint256 amount
+    ) external nonReentrant notPaused onlyOwnerOrRoles(AGENT_ROLE) amountNotZero(amount) {
         balances[token] += amount;
         ERC20(token).transferFrom(msg.sender, address(this), amount);
         emit Deposited(token, msg.sender, amount);
     }
 
-    function withdraw(address token, uint256 amount)
-        external
-        nonReentrant
-        notPaused
-        onlyOwnerOrRoles(AGENT_ROLE)
-        amountNotZero(amount)
-    {
+    function withdraw(
+        address token,
+        uint256 amount
+    ) external nonReentrant notPaused onlyOwnerOrRoles(AGENT_ROLE) amountNotZero(amount) {
         if (balances[msg.sender] < amount) {
             revert InsufficientBalance();
         }
