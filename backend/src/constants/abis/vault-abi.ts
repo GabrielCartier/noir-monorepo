@@ -16,6 +16,10 @@ export const VAULT_ABI = [
     stateMutability: 'nonpayable',
   },
   {
+    type: 'receive',
+    stateMutability: 'payable',
+  },
+  {
     type: 'function',
     name: 'balances',
     inputs: [
@@ -82,6 +86,19 @@ export const VAULT_ABI = [
         internalType: 'address',
       },
     ],
+    outputs: [
+      {
+        name: '',
+        type: 'uint256',
+        internalType: 'uint256',
+      },
+    ],
+    stateMutability: 'view',
+  },
+  {
+    type: 'function',
+    name: 'getNativeBalance',
+    inputs: [],
     outputs: [
       {
         name: '',
@@ -312,6 +329,19 @@ export const VAULT_ABI = [
     stateMutability: 'nonpayable',
   },
   {
+    type: 'function',
+    name: 'withdrawNative',
+    inputs: [
+      {
+        name: 'amount',
+        type: 'uint256',
+        internalType: 'uint256',
+      },
+    ],
+    outputs: [],
+    stateMutability: 'nonpayable',
+  },
+  {
     type: 'event',
     name: 'Deposited',
     inputs: [
@@ -321,6 +351,44 @@ export const VAULT_ABI = [
         indexed: true,
         internalType: 'address',
       },
+      {
+        name: 'user',
+        type: 'address',
+        indexed: true,
+        internalType: 'address',
+      },
+      {
+        name: 'amount',
+        type: 'uint256',
+        indexed: false,
+        internalType: 'uint256',
+      },
+    ],
+    anonymous: false,
+  },
+  {
+    type: 'event',
+    name: 'NativeDeposited',
+    inputs: [
+      {
+        name: 'user',
+        type: 'address',
+        indexed: true,
+        internalType: 'address',
+      },
+      {
+        name: 'amount',
+        type: 'uint256',
+        indexed: false,
+        internalType: 'uint256',
+      },
+    ],
+    anonymous: false,
+  },
+  {
+    type: 'event',
+    name: 'NativeWithdrawn',
+    inputs: [
       {
         name: 'user',
         type: 'address',
@@ -472,6 +540,11 @@ export const VAULT_ABI = [
   {
     type: 'error',
     name: 'Reentrancy',
+    inputs: [],
+  },
+  {
+    type: 'error',
+    name: 'TransferFailed',
     inputs: [],
   },
   {
