@@ -1,0 +1,10 @@
+{
+	"folders": [
+		{
+			"path": "../../../../../bork/bork-tools"
+		}
+	],
+	"settings": {
+		"biome.rename": true
+	}
+}

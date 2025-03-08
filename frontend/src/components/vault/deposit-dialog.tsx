@@ -12,13 +12,28 @@ import {
 } from '@/src/components/ui/dialog';
 import { Input } from '@/src/components/ui/input';
 import { Label } from '@/src/components/ui/label';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/src/components/ui/select';
+import {
+  Tabs,
+  TabsContent,
+  TabsList,
+  TabsTrigger,
+} from '@/src/components/ui/tabs';
 import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
-import { wrappedSonicAbi } from '../../lib/constants/abis/wrapped-sonic-abi';
 import {
-  WRAPPED_SONIC_ADDRESS,
-  depositToVault,
-} from '../../lib/services/vault-service';
+  getTokenBalances,
+  transferToken,
+} from '../../lib/services/transfer-service';
+import { depositForVault } from '../../lib/services/vault-service';
+import { SONIC } from '../../lib/services/vault-service';
+import type { Token } from '../../types/token';
 import type { DepositDialogProps } from '../../types/vault';
 import { useWallet } from '../providers/wallet-provider';
 
@@ -30,9 +45,10 @@ export function DepositDialog({
   const [isOpen, setIsOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [amount, setAmount] = useState('');
-  const [balance, setBalance] = useState<bigint | null>(null);
-  const [wrappedBalance, setWrappedBalance] = useState<bigint | null>(null);
-  const [hasWrappedTokens, setHasWrappedTokens] = useState(false);
+  const [selectedToken, setSelectedToken] = useState<Token>(SONIC);
+  const [tokenBalances, setTokenBalances] = useState<
+    { token: Token; balance: bigint }[]
+  >([]);
   const { publicClient, ensureCorrectChain, walletClient } = useWallet();
 
   useEffect(() => {
@@ -43,63 +59,15 @@ export function DepositDialog({
 
   const checkBalances = async () => {
     try {
-      // Check native S balance
-      const nativeBalance = await publicClient.getBalance({
-        address: address as `0x${string}`,
-      });
-      setBalance(nativeBalance);
-
-      // Check wrapped S (wS) balance
-      const wrappedBalance = await publicClient.readContract({
-        address: WRAPPED_SONIC_ADDRESS as `0x${string}`,
-        abi: wrappedSonicAbi,
-        functionName: 'balanceOf',
-        args: [address as `0x${string}`],
-      });
-      setWrappedBalance(wrappedBalance);
-      setHasWrappedTokens(wrappedBalance > 0n);
+      const balances = await getTokenBalances(address, publicClient);
+      setTokenBalances(balances);
     } catch (error) {
       console.error('Error checking balances:', error);
       toast.error('Failed to check balances');
     }
   };
 
-  const handleSendWrappedTokens = async () => {
-    if (!walletClient || !wrappedBalance || wrappedBalance === 0n) {
-      return;
-    }
-
-    setIsLoading(true);
-    try {
-      await ensureCorrectChain();
-
-      // Send wrapped tokens to vault using withdrawTo
-      const { request: withdrawRequest } = await publicClient.simulateContract({
-        address: WRAPPED_SONIC_ADDRESS as `0x${string}`,
-        abi: wrappedSonicAbi,
-        functionName: 'withdrawTo',
-        args: [vaultAddress as `0x${string}`, wrappedBalance],
-        account: address as `0x${string}`,
-      });
-
-      const withdrawHash = await walletClient.writeContract({
-        ...withdrawRequest,
-        account: address as `0x${string}`,
-      });
-
-      await publicClient.waitForTransactionReceipt({ hash: withdrawHash });
-      toast.success('Successfully sent wrapped tokens to vault');
-      setHasWrappedTokens(false);
-      onDepositSuccess();
-    } catch (error) {
-      console.error('Error sending wrapped tokens:', error);
-      toast.error('Failed to send wrapped tokens to vault');
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const handleDeposit = async () => {
+  const handleDirectDeposit = async () => {
     if (!amount || Number.isNaN(Number(amount)) || Number(amount) <= 0) {
       toast.error('Please enter a valid amount');
       return;
@@ -112,25 +80,21 @@ export function DepositDialog({
 
     setIsLoading(true);
     try {
-      // Ensure we're on the correct chain
       await ensureCorrectChain();
-
-      // Convert amount to wei (18 decimals)
       const amountInWei = BigInt(Math.floor(Number(amount) * 1e18));
 
       // Check if user has sufficient balance
-      if (balance && balance < amountInWei) {
+      const sonicBalance = tokenBalances.find(
+        (b) => b.token.symbol === 'S',
+      )?.balance;
+      if (sonicBalance && sonicBalance < amountInWei) {
         toast.error(
-          `Insufficient Sonic token balance. You have ${Number(balance) / 1e18} S, but need ${amount} S`,
+          `Insufficient Sonic token balance. You have ${Number(sonicBalance) / 1e18} S, but need ${amount} S`,
         );
         return;
       }
 
-      toast.info(
-        'Please sign two transactions: first to wrap S tokens, then to send them to vault',
-      );
-
-      await depositToVault({
+      await depositForVault({
         address,
         vaultAddress,
         publicClient,
@@ -141,8 +105,6 @@ export function DepositDialog({
       toast.success('Successfully deposited S tokens to vault');
       setIsOpen(false);
       onDepositSuccess();
-
-      // Refresh balances after successful deposit
       checkBalances();
     } catch (error) {
       console.error('Error depositing:', error);
@@ -153,16 +115,73 @@ export function DepositDialog({
           toast.error('Insufficient funds for gas');
         } else if (error.message.includes('chain')) {
           toast.error('Please switch to the Sonic network to continue');
-        } else if (error.message.includes('ERC20WithdrawFailed')) {
-          toast.error(
-            'Failed to send tokens to vault. Your tokens are wrapped - you can try sending them separately.',
-          );
-          await checkBalances();
         } else {
           toast.error(error.message);
         }
       } else {
         toast.error('Failed to deposit');
+      }
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleTokenTransfer = async () => {
+    if (!amount || Number.isNaN(Number(amount)) || Number(amount) <= 0) {
+      toast.error('Please enter a valid amount');
+      return;
+    }
+
+    if (!walletClient) {
+      toast.error('Wallet client not initialized');
+      return;
+    }
+
+    setIsLoading(true);
+    try {
+      await ensureCorrectChain();
+      const amountInWei = BigInt(Math.floor(Number(amount) * 1e18));
+
+      // Check if user has sufficient balance
+      const tokenBalance = tokenBalances.find(
+        (b) => b.token.symbol === selectedToken.symbol,
+      )?.balance;
+      if (tokenBalance && tokenBalance < amountInWei) {
+        toast.error(
+          `Insufficient ${selectedToken.symbol} balance. You have ${Number(tokenBalance) / 1e18} ${selectedToken.symbol}, but need ${amount} ${selectedToken.symbol}`,
+        );
+        return;
+      }
+
+      await transferToken({
+        token: selectedToken,
+        amount: amountInWei,
+        from: address,
+        to: vaultAddress,
+        publicClient,
+        walletClient,
+      });
+
+      toast.success(
+        `Successfully transferred ${selectedToken.symbol} tokens to vault`,
+      );
+      setIsOpen(false);
+      onDepositSuccess();
+      checkBalances();
+    } catch (error) {
+      console.error('Error transferring:', error);
+      if (error instanceof Error) {
+        if (error.message.includes('User rejected')) {
+          toast.error('Transaction rejected by user');
+        } else if (error.message.includes('insufficient funds')) {
+          toast.error('Insufficient funds for gas');
+        } else if (error.message.includes('chain')) {
+          toast.error('Please switch to the Sonic network to continue');
+        } else {
+          toast.error(error.message);
+        }
+      } else {
+        toast.error('Failed to transfer');
       }
     } finally {
       setIsLoading(false);
@@ -176,51 +195,100 @@ export function DepositDialog({
           Deposit
         </Button>
       </DialogTrigger>
-      <DialogContent>
+      <DialogContent className="sm:max-w-[425px]">
         <DialogHeader>
-          <DialogTitle>Deposit Sonic Tokens</DialogTitle>
+          <DialogTitle>Deposit to Vault</DialogTitle>
           <DialogDescription>
-            Enter the amount of Sonic tokens you want to deposit into your
-            vault. This requires two transactions: first to wrap your S tokens,
-            then to send them to the vault.
+            Choose how you want to deposit tokens into your vault.
           </DialogDescription>
         </DialogHeader>
-        <div className="grid gap-4 py-4">
-          <div className="grid gap-2">
-            <Label htmlFor="amount">Amount (S)</Label>
-            <Input
-              id="amount"
-              type="number"
-              placeholder="Enter amount"
-              value={amount}
-              onChange={(e) => setAmount(e.target.value)}
-              min="0"
-              step="0.000000000000000001"
-            />
-          </div>
-          <div className="text-sm text-muted-foreground space-y-1">
-            {balance !== null && (
-              <p>Available S balance: {Number(balance) / 1e18} S</p>
-            )}
-            {wrappedBalance !== null && wrappedBalance > 0n && (
-              <p>Wrapped S balance: {Number(wrappedBalance) / 1e18} wS</p>
-            )}
-          </div>
-        </div>
-        <DialogFooter className="flex flex-col gap-2">
-          <Button onClick={handleDeposit} disabled={isLoading}>
-            {isLoading ? 'Processing...' : 'Deposit'}
-          </Button>
-          {hasWrappedTokens && (
-            <Button
-              onClick={handleSendWrappedTokens}
-              variant="secondary"
-              disabled={isLoading}
-            >
-              Send Wrapped Tokens to Vault
-            </Button>
-          )}
-        </DialogFooter>
+        <Tabs defaultValue="direct" className="w-full">
+          <TabsList className="grid w-full grid-cols-2">
+            <TabsTrigger value="direct">Direct Deposit</TabsTrigger>
+            <TabsTrigger value="transfer">Token Transfer</TabsTrigger>
+          </TabsList>
+          <TabsContent value="direct">
+            <div className="grid gap-4 py-4">
+              <div className="grid gap-2">
+                <Label htmlFor="amount">Amount (S)</Label>
+                <Input
+                  id="amount"
+                  type="number"
+                  placeholder="Enter amount"
+                  value={amount}
+                  onChange={(e) => setAmount(e.target.value)}
+                  min="0"
+                  step="0.000000000000000001"
+                />
+              </div>
+              <div className="text-sm text-muted-foreground">
+                {tokenBalances.find((b) => b.token.symbol === 'S') && (
+                  <p>
+                    Available S balance:{' '}
+                    {Number(
+                      tokenBalances.find((b) => b.token.symbol === 'S')
+                        ?.balance ?? 0n,
+                    ) / 1e18}{' '}
+                    S
+                  </p>
+                )}
+              </div>
+              <DialogFooter>
+                <Button onClick={handleDirectDeposit} disabled={isLoading}>
+                  {isLoading ? 'Processing...' : 'Deposit S Tokens'}
+                </Button>
+              </DialogFooter>
+            </div>
+          </TabsContent>
+          <TabsContent value="transfer">
+            <div className="grid gap-4 py-4">
+              <div className="grid gap-2">
+                <Label htmlFor="token">Token</Label>
+                <Select
+                  value={selectedToken.symbol}
+                  onValueChange={(value) => {
+                    const token = tokenBalances.find(
+                      (b) => b.token.symbol === value,
+                    )?.token;
+                    if (token) {
+                      setSelectedToken(token);
+                    }
+                  }}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select token" />
+                  </SelectTrigger>
+                  <SelectContent className="max-h-[200px] overflow-y-auto">
+                    {tokenBalances.map(({ token, balance }) => (
+                      <SelectItem key={token.symbol} value={token.symbol}>
+                        {token.symbol} ({Number(balance) / 1e18} available)
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="amount">Amount</Label>
+                <Input
+                  id="amount"
+                  type="number"
+                  placeholder="Enter amount"
+                  value={amount}
+                  onChange={(e) => setAmount(e.target.value)}
+                  min="0"
+                  step="0.000000000000000001"
+                />
+              </div>
+              <DialogFooter>
+                <Button onClick={handleTokenTransfer} disabled={isLoading}>
+                  {isLoading
+                    ? 'Processing...'
+                    : `Transfer ${selectedToken.symbol}`}
+                </Button>
+              </DialogFooter>
+            </div>
+          </TabsContent>
+        </Tabs>
       </DialogContent>
     </Dialog>
   );
