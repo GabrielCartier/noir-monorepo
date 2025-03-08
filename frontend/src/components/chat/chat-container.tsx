@@ -34,13 +34,13 @@ export const ChatContainer = () => {
     setIsLoading(true);
 
     try {
-      const response = await messagesService.send({
-        name: address ?? '',
-        text: hasInitialized.current ? text : `Hello! ${text}`,
-        walletAddress: hasInitialized.current
-          ? undefined
-          : (address ?? undefined),
-      });
+      const response = await messagesService.send(
+        {
+          name: address ?? '',
+          text: hasInitialized.current ? text : `Hello! ${text}`,
+        },
+        address || undefined,
+      );
       hasInitialized.current = true;
 
       // Process all messages from the response

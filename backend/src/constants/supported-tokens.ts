@@ -1,4 +1,6 @@
+import { z } from 'zod';
 import type { Token } from '../types/common/token';
+import { ethereumAddressSchema } from '../validators/ethereum';
 
 export const SUPPORTED_TOKENS: Token[] = [
   {
@@ -134,3 +136,36 @@ export const SUPPORTED_TOKENS: Token[] = [
     decimals: 18,
   },
 ];
+
+export const SUPPORTED_TOKENS_OBJECT = {
+  SONIC: {
+    symbol: 'S',
+    name: 'Wrapped Sonic',
+    address: '0x039e2fB66102314Ce7b64Ce5Ce3E5183bc94aD38' as const,
+    decimals: 18,
+  },
+  STAKED_SONIC: {
+    symbol: 'stS',
+    name: 'Staked Sonic',
+    address: '0xE5DA20F15420aD15DE0fa650600aFc998bbE3955' as const,
+    decimals: 18,
+  },
+} as const;
+
+// Type for token addresses
+export type TokenAddresses = {
+  [K in keyof typeof SUPPORTED_TOKENS_OBJECT]: (typeof SUPPORTED_TOKENS_OBJECT)[K]['address'];
+};
+
+// Zod schema for token addresses
+export const tokenAddressesSchema = z.object({
+  SONIC: ethereumAddressSchema,
+  STAKED_SONIC: ethereumAddressSchema,
+});
+
+// Helper function to get token address
+export function getTokenAddress(
+  token: keyof typeof SUPPORTED_TOKENS_OBJECT,
+): `0x${string}` {
+  return SUPPORTED_TOKENS_OBJECT[token].address;
+}

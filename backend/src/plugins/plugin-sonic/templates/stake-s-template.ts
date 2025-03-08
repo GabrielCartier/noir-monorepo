@@ -44,28 +44,3 @@ Otherwise return:
 }
 \`\`\`
 `;
-
-// 2. Final Action: Validate Staking Amount
-export const validateStakingAmountTemplate = `
-Validate the staking of {{amount}} $S tokens using the wallet information below:
-
-{{walletInfo}}
-{{userVaultAddress}}
-
-Check:
-1. Amount is positive and non-zero
-2. User has sufficient balance (check S token balance in walletInfo)
-3. Amount is reasonable (not trying to stake more than available)
-4. Vault address is available and is a valid Ethereum address (must start with 0x and be 42 characters long)
-
-Example valid vault address format: 0x79D73FBAE74f8B386b2F68Ca01e081FEe5eF690d
-
-Return:
-\`\`\`json
-{
-    "amount": number,
-    "userVaultAddress": string (must be a valid Ethereum address),
-    "error": string | null
-}
-\`\`\`
-`;

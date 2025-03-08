@@ -23,6 +23,13 @@ export const wrappedSonicAbi = [
     type: 'function',
   },
   {
+    inputs: [{ name: 'value', type: 'uint256' }],
+    name: 'withdraw',
+    outputs: [{ name: '', type: 'bool' }],
+    stateMutability: 'nonpayable',
+    type: 'function',
+  },
+  {
     inputs: [
       { name: 'account', type: 'address' },
       { name: 'value', type: 'uint256' },
