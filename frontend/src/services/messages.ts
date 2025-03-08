@@ -55,11 +55,18 @@ const getMockResponse = async (): Promise<BaseResponse> => {
 };
 
 export const messagesService = {
-  async send(message: MessageRequest): Promise<BaseResponse> {
+  async send(
+    message: MessageRequest,
+    walletAddress?: string,
+  ): Promise<BaseResponse> {
     const { isDemoMode } = useDemoStore.getState();
 
     if (isDemoMode) {
       return getMockResponse();
+    }
+
+    if (!walletAddress) {
+      throw new Error('No wallet connected');
     }
 
     const response = await fetch(`${API_URL}/message`, {
@@ -70,7 +77,8 @@ export const messagesService = {
       body: JSON.stringify({
         ...message,
         agentId: '416659f6-a8ab-4d90-87b5-fd5635ebe37d', // Default agent ID from README
-        userId: getWalletUUID(message.walletAddress), // Get persistent UUID for this wallet
+        userId: getWalletUUID(walletAddress), // Get persistent UUID for this wallet
+        walletAddress, // Include the connected wallet address
       }),
     });
 

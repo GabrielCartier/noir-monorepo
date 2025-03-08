@@ -15,8 +15,8 @@ export function AgentPage() {
 
         {/* Right sidebar */}
         <div className="space-y-4">
-          <TransactionHistory />
           <VaultValue />
+          <TransactionHistory />
         </div>
       </div>
     </div>

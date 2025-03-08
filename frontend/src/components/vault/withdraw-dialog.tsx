@@ -12,39 +12,26 @@ import {
 } from '@/src/components/ui/dialog';
 import { Input } from '@/src/components/ui/input';
 import { Label } from '@/src/components/ui/label';
-import { withdrawFromVault } from '@/src/lib/services/vault-service';
 import { useState } from 'react';
 import { toast } from 'sonner';
+import { withdrawFromVault } from '../../lib/services/vault-service';
+import type { WithdrawDialogProps } from '../../types/vault';
 import { useWallet } from '../providers/wallet-provider';
-
-interface WithdrawDialogProps {
-  address: `0x${string}`;
-  vaultAddress: `0x${string}`;
-  maxAmount?: string;
-  onWithdrawSuccess?: () => void;
-  disabled?: boolean;
-}
 
 export function WithdrawDialog({
   address,
   vaultAddress,
   maxAmount,
   onWithdrawSuccess,
-  disabled,
-}: WithdrawDialogProps) {
+}: Omit<WithdrawDialogProps, 'publicClient' | 'walletClient'>) {
   const [isOpen, setIsOpen] = useState(false);
-  const [amount, setAmount] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  const { publicClient, ensureCorrectChain, walletClient } = useWallet();
+  const [amount, setAmount] = useState('');
+  const { ensureCorrectChain } = useWallet();
 
   const handleWithdraw = async () => {
     if (!amount || Number.isNaN(Number(amount)) || Number(amount) <= 0) {
       toast.error('Please enter a valid amount');
-      return;
-    }
-
-    if (!walletClient) {
-      toast.error('Wallet client not initialized');
       return;
     }
 
@@ -57,12 +44,10 @@ export function WithdrawDialog({
       const amountInWei = BigInt(Math.floor(Number(amount) * 1e18));
 
       // Check if amount is within available balance
-      if (
-        maxAmount &&
-        BigInt(Math.floor(Number(maxAmount) * 1e18)) < amountInWei
-      ) {
+      const maxAmountBigInt = BigInt(maxAmount || '0');
+      if (amountInWei > maxAmountBigInt) {
         toast.error(
-          `Insufficient vault balance. You have ${maxAmount} S available to withdraw.`,
+          `Insufficient vault balance. You have ${Number(maxAmountBigInt) / 1e18} S, but tried to withdraw ${amount} S`,
         );
         return;
       }
@@ -70,25 +55,16 @@ export function WithdrawDialog({
       await withdrawFromVault({
         address,
         vaultAddress,
-        publicClient,
-        walletClient,
         amount: amountInWei,
       });
-      toast.success('Withdrawal successful');
+
+      toast.success('Withdrawal request submitted successfully');
       setIsOpen(false);
-      onWithdrawSuccess?.();
+      onWithdrawSuccess();
     } catch (error) {
       console.error('Error withdrawing:', error);
       if (error instanceof Error) {
-        if (error.message.includes('User rejected')) {
-          toast.error('Transaction rejected by user');
-        } else if (error.message.includes('insufficient funds')) {
-          toast.error('Insufficient funds for gas');
-        } else if (error.message.includes('chain')) {
-          toast.error('Please switch to the Sonic network to continue');
-        } else {
-          toast.error(error.message);
-        }
+        toast.error(error.message);
       } else {
         toast.error('Failed to withdraw');
       }
@@ -101,46 +77,43 @@ export function WithdrawDialog({
     <Dialog open={isOpen} onOpenChange={setIsOpen}>
       <DialogTrigger asChild={true}>
         <Button
-          variant="outline"
-          className="w-full"
-          disabled={disabled || !maxAmount}
+          variant="default"
+          className="w-full bg-gray-900 hover:bg-black/90 text-white"
         >
-          Withdraw
+          withdraw
         </Button>
       </DialogTrigger>
-      <DialogContent className="sm:max-w-[425px]">
+      <DialogContent>
         <DialogHeader>
-          <DialogTitle>Withdraw from Vault</DialogTitle>
+          <DialogTitle>Withdraw Sonic Tokens</DialogTitle>
           <DialogDescription>
-            Enter the amount you want to withdraw from your vault.
+            Enter the amount of Sonic tokens you want to withdraw from your
+            vault. The withdrawal will be processed by the vault and sent to
+            your wallet.
           </DialogDescription>
         </DialogHeader>
         <div className="grid gap-4 py-4">
           <div className="grid gap-2">
-            <Label htmlFor="amount">Amount</Label>
+            <Label htmlFor="amount">Amount (S)</Label>
             <Input
               id="amount"
               type="number"
+              placeholder="Enter amount"
               value={amount}
               onChange={(e) => setAmount(e.target.value)}
-              placeholder="Enter amount"
-              max={maxAmount}
               min="0"
               step="0.000000000000000001"
             />
-            {maxAmount && (
-              <p className="text-sm text-muted-foreground">
-                Available: {maxAmount} S
-              </p>
-            )}
           </div>
+          {maxAmount && (
+            <p className="text-sm text-muted-foreground">
+              Available balance: {Number(BigInt(maxAmount)) / 1e18} S
+            </p>
+          )}
         </div>
         <DialogFooter>
-          <Button
-            onClick={handleWithdraw}
-            disabled={!amount || isLoading || Number(amount) <= 0}
-          >
-            {isLoading ? 'Withdrawing...' : 'Withdraw'}
+          <Button onClick={handleWithdraw} disabled={isLoading}>
+            {isLoading ? 'Processing...' : 'Withdraw'}
           </Button>
         </DialogFooter>
       </DialogContent>

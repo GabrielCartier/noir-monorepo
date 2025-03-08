@@ -1,12 +1,8 @@
-import { erc20Abi } from 'viem';
+import type { PublicClient, WalletClient } from 'viem';
 import type { Token } from '../../types/token';
-import type {
-  VaultInfo,
-  VaultOperationParams,
-  VaultStatus,
-} from '../../types/vault';
+import type { VaultInfo, VaultStatus } from '../../types/vault';
 import { clientEnv } from '../config/client-env';
-import { VAULT_ABI } from '../constants/abis/vault-abi';
+import { wrappedSonicAbi } from '../constants/abis/wrapped-sonic-abi';
 import { SUPPORTED_TOKENS } from '../constants/supported-tokens';
 
 const SONIC_TOKEN = SUPPORTED_TOKENS.find((token) => token.symbol === 'S');
@@ -17,6 +13,8 @@ if (!SONIC_TOKEN) {
 
 // After the check, we can safely assert that SONIC_TOKEN is a Token
 export const SONIC = SONIC_TOKEN as Token;
+
+export const WRAPPED_SONIC_ADDRESS = SONIC.address;
 
 export async function checkVaultStatus(
   walletAddress: string,
@@ -79,106 +77,64 @@ export async function createVault(
   };
 }
 
-export async function depositToVault({
+export async function depositForVault({
   address,
+  vaultAddress,
   publicClient,
   walletClient,
-  vaultAddress,
-  amount = BigInt(1e18), // Default to 1 Sonic token if not specified
-}: VaultOperationParams): Promise<void> {
-  // Check current allowance
-  const currentAllowance = await publicClient.readContract({
-    address: SONIC.address as `0x${string}`,
-    abi: erc20Abi,
-    functionName: 'allowance',
-    args: [address, vaultAddress],
+  amount,
+}: {
+  address: string;
+  vaultAddress: string;
+  publicClient: PublicClient;
+  walletClient: WalletClient;
+  amount: bigint;
+}) {
+  const { request } = await publicClient.simulateContract({
+    address: WRAPPED_SONIC_ADDRESS as `0x${string}`,
+    abi: wrappedSonicAbi,
+    functionName: 'depositFor',
+    args: [vaultAddress as `0x${string}`],
+    value: amount,
+    account: address as `0x${string}`,
   });
 
-  // If allowance is insufficient, request approval
-  if (currentAllowance < amount) {
-    const { request: approveRequest } = await publicClient.simulateContract({
-      account: address,
-      address: SONIC.address as `0x${string}`,
-      abi: erc20Abi,
-      functionName: 'approve',
-      args: [vaultAddress, amount],
-    });
-
-    const approveHash = await walletClient.writeContract({
-      address: approveRequest.address,
-      abi: approveRequest.abi,
-      functionName: approveRequest.functionName,
-      args: approveRequest.args,
-      account: approveRequest.account,
-      chain: null,
-      type: 'eip1559',
-      maxFeePerGas: BigInt(1000000000), // 1 Gwei
-      maxPriorityFeePerGas: BigInt(100000000), // 0.1 Gwei
-      gas: BigInt(210000), // Standard gas limit for ERC20 operations
-    });
-    const approveReceipt = await publicClient.waitForTransactionReceipt({
-      hash: approveHash,
-      confirmations: 1,
-    });
-
-    if (approveReceipt.status === 'reverted') {
-      throw new Error('Token approval failed');
-    }
-  }
-
-  // Now deposit into the vault
-  const { request: depositRequest } = await publicClient.simulateContract({
-    account: address,
-    address: vaultAddress,
-    abi: VAULT_ABI,
-    functionName: 'deposit',
-    args: [SONIC.address as `0x${string}`, amount],
+  const hash = await walletClient.writeContract({
+    ...request,
+    account: address as `0x${string}`,
   });
 
-  const depositHash = await walletClient.writeContract({
-    address: depositRequest.address,
-    abi: depositRequest.abi,
-    functionName: depositRequest.functionName,
-    args: depositRequest.args,
-    account: depositRequest.account,
-    chain: null,
-    type: 'eip1559',
-    maxFeePerGas: BigInt(1000000000), // 1 Gwei
-    maxPriorityFeePerGas: BigInt(100000000), // 0.1 Gwei
-    gas: BigInt(210000), // Standard gas limit for ERC20 operations
-  });
-  const depositReceipt = await publicClient.waitForTransactionReceipt({
-    hash: depositHash,
-    confirmations: 1,
-  });
-
-  if (depositReceipt.status === 'reverted') {
-    throw new Error('Deposit transaction failed');
-  }
+  await publicClient.waitForTransactionReceipt({ hash });
+  return hash;
 }
 
 export async function withdrawFromVault({
   address,
-  publicClient,
-  walletClient,
   vaultAddress,
-  amount = BigInt(1e18), // Default to 1 Sonic token if not specified
-}: VaultOperationParams): Promise<void> {
-  const { request } = await publicClient.simulateContract({
-    account: address,
-    address: vaultAddress,
-    abi: VAULT_ABI,
-    functionName: 'withdraw',
-    args: [SONIC.address as `0x${string}`, amount],
-  });
+  amount,
+}: {
+  address: string;
+  vaultAddress: string;
+  amount: bigint;
+}): Promise<void> {
+  const response = await fetch(
+    `${clientEnv.NEXT_PUBLIC_API_URL}/vault/withdraw`,
+    {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        walletAddress: address,
+        vaultAddress,
+        amount: amount.toString(),
+      }),
+    },
+  );
 
-  const hash = await walletClient.writeContract(request);
-  const receipt = await publicClient.waitForTransactionReceipt({
-    hash,
-    confirmations: 1,
-  });
+  const data = await response.json();
 
-  if (receipt.status === 'reverted') {
-    throw new Error('Withdrawal transaction failed');
+  if (!response.ok) {
+    throw new Error(data.error || 'Failed to withdraw from vault');
   }
 }

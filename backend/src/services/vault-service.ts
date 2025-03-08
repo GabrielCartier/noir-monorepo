@@ -6,11 +6,13 @@ import type { Account, PublicClient, WalletClient } from 'viem';
 import { z } from 'zod';
 import { VAULT_ABI } from '../constants/abis/vault-abi';
 import { VAULT_FACTORY_ABI } from '../constants/abis/vault-factory-abi';
+import { wrappedSonicAbi } from '../constants/abis/wrapped-sonic-abi';
 import type {
   GetVaultParams,
   TokenParams,
   VaultBalanceResponse,
   VaultTransactionResponse,
+  WithdrawParams,
 } from '../types/vault-service';
 import { ethereumAddressSchema } from '../validators/ethereum';
 
@@ -79,16 +81,44 @@ export async function depositToVault(
 }
 
 /**
- * Withdraw tokens from the vault
+ * Withdraw tokens from the vault and unwrap them back to native S tokens
  */
 export async function withdrawFromVault(
-  params: TokenParams,
+  params: WithdrawParams,
 ): Promise<VaultTransactionResponse> {
-  const { publicClient, walletClient, vaultAddress, tokenAddress, amount } =
-    params;
+  const {
+    publicClient,
+    walletClient,
+    vaultAddress,
+    tokenAddress,
+    amount,
+    userAddress,
+  } = params;
 
   try {
-    const { request } = await publicClient.simulateContract({
+    // Check vault balance first
+    const balance = await publicClient.readContract({
+      address: vaultAddress,
+      abi: VAULT_ABI,
+      functionName: 'getBalance',
+      args: [tokenAddress],
+    });
+
+    if (balance < amount) {
+      elizaLogger.error('[VaultService] Insufficient balance in vault:', {
+        vaultAddress,
+        tokenAddress,
+        requested: amount.toString(),
+        available: balance.toString(),
+      });
+      return {
+        success: false,
+        error: `Insufficient balance in vault. Requested: ${amount.toString()}, Available: ${balance.toString()}`,
+      };
+    }
+
+    // First withdraw wS tokens from vault to the agent
+    const { request: withdrawRequest } = await publicClient.simulateContract({
       account: walletClient.account,
       address: vaultAddress,
       abi: VAULT_ABI,
@@ -96,22 +126,56 @@ export async function withdrawFromVault(
       args: [tokenAddress, amount],
     });
 
-    const hash = await walletClient.writeContract(request);
-    await publicClient.waitForTransactionReceipt({ hash });
+    const withdrawHash = await walletClient.writeContract(withdrawRequest);
+    const withdrawReceipt = await publicClient.waitForTransactionReceipt({
+      hash: withdrawHash,
+    });
 
-    elizaLogger.info('[VaultService] Successfully withdrawn from vault:', {
+    if (withdrawReceipt.status === 'reverted') {
+      elizaLogger.error('[VaultService] Vault withdrawal failed');
+      return {
+        success: false,
+        error: 'Vault withdrawal failed',
+      };
+    }
+
+    // Now unwrap wS tokens back to native S tokens and send to user
+    const { request: unwrapRequest } = await publicClient.simulateContract({
+      account: walletClient.account,
+      address: tokenAddress,
+      abi: wrappedSonicAbi,
+      functionName: 'withdrawTo',
+      args: [userAddress, amount],
+    });
+
+    const unwrapHash = await walletClient.writeContract(unwrapRequest);
+    const unwrapReceipt = await publicClient.waitForTransactionReceipt({
+      hash: unwrapHash,
+    });
+
+    if (unwrapReceipt.status === 'reverted') {
+      elizaLogger.error('[VaultService] Token unwrapping failed');
+      return {
+        success: false,
+        error: 'Token unwrapping failed',
+      };
+    }
+
+    elizaLogger.info('[VaultService] Successfully withdrawn and unwrapped:', {
       vaultAddress,
       tokenAddress,
       amount: amount.toString(),
-      transactionHash: hash,
+      userAddress,
+      withdrawHash,
+      unwrapHash,
     });
 
     return {
       success: true,
-      transactionHash: hash,
+      transactionHash: unwrapHash,
     };
   } catch (error) {
-    elizaLogger.error('[VaultService] Error withdrawing from vault:', error);
+    elizaLogger.error('[VaultService] Error in withdrawal process:', error);
     return {
       success: false,
       error: error instanceof Error ? error.message : 'Unknown error occurred',

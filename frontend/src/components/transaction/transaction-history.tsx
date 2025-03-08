@@ -1,12 +1,7 @@
 'use client';
 
 import { Button } from '@/src/components/ui/button';
-import {
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-} from '@/src/components/ui/card';
+import { Card, CardContent } from '@/src/components/ui/card';
 import { ExternalLink } from 'lucide-react';
 
 interface Transaction {
@@ -46,9 +41,12 @@ const MOCK_TRANSACTIONS: Transaction[] = [
 export function TransactionHistory() {
   return (
     <Card>
-      <CardHeader className="pb-3">
-        <CardTitle className="text-base">Transaction History</CardTitle>
-      </CardHeader>
+      <div className="px-6 py-4 mb-4 bg-muted/50">
+        <h2 className="text-2xl font-semibold">
+          Transaction History (Mock Data)
+        </h2>
+      </div>
+      <div className="h-[1px] mx-6 bg-border" />
       <CardContent className="space-y-4">
         {MOCK_TRANSACTIONS.map((tx) => (
           <div

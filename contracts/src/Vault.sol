@@ -13,10 +13,13 @@ contract Vault is OwnableRoles, ReentrancyGuard {
     event VaultCreated(address indexed vaultAddress, address indexed owner);
     event Deposited(address indexed token, address indexed user, uint256 amount);
     event Withdrawn(address indexed token, address indexed user, uint256 amount);
+    event NativeDeposited(address indexed user, uint256 amount);
+    event NativeWithdrawn(address indexed user, uint256 amount);
 
     error VaultPaused();
     error InvalidAmount();
     error InsufficientBalance();
+    error TransferFailed();
 
     constructor(address owner, address agentAddress) {
         _initializeOwner(owner);
@@ -25,11 +28,27 @@ contract Vault is OwnableRoles, ReentrancyGuard {
         emit VaultCreated(address(this), owner);
     }
 
+    receive() external payable notPaused {
+        emit NativeDeposited(msg.sender, msg.value);
+    }
+
+    function withdrawNative(uint256 amount) external nonReentrant notPaused onlyOwnerOrRoles(AGENT_ROLE) amountNotZero(amount) {
+        if (address(this).balance < amount) {
+            revert InsufficientBalance();
+        }
+        
+        (bool success, ) = msg.sender.call{value: amount}("");
+        if (!success) {
+            revert TransferFailed();
+        }
+        
+        emit NativeWithdrawn(msg.sender, amount);
+    }
+
     function deposit(
         address token,
         uint256 amount
     ) external nonReentrant notPaused onlyOwnerOrRoles(AGENT_ROLE) amountNotZero(amount) {
-        balances[token] += amount;
         ERC20(token).transferFrom(msg.sender, address(this), amount);
         emit Deposited(token, msg.sender, amount);
     }
@@ -38,16 +57,19 @@ contract Vault is OwnableRoles, ReentrancyGuard {
         address token,
         uint256 amount
     ) external nonReentrant notPaused onlyOwnerOrRoles(AGENT_ROLE) amountNotZero(amount) {
-        if (balances[msg.sender] < amount) {
+        if (ERC20(token).balanceOf(address(this)) < amount) {
             revert InsufficientBalance();
         }
-        balances[msg.sender] -= amount;
         ERC20(token).transfer(msg.sender, amount);
         emit Withdrawn(token, msg.sender, amount);
     }
 
     function getBalance(address token) external view returns (uint256) {
-        return balances[token];
+        return ERC20(token).balanceOf(address(this));
+    }
+
+    function getNativeBalance() external view returns (uint256) {
+        return address(this).balance;
     }
 
     function pause() external onlyOwner {

@@ -16,6 +16,7 @@
     "node": ">=22"
   },
   "dependencies": {
-    "ethers": "5.7.2"
+    "ethers": "5.7.2",
+    "exponential-backoff": "^3.1.2"
   }
 }

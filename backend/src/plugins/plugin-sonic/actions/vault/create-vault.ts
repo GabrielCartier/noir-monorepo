@@ -11,9 +11,9 @@ import {
 import { v4 as uuidv4 } from 'uuid';
 import type { Account, Address, PublicClient, WalletClient } from 'viem';
 import { z } from 'zod';
-import { VAULT_FACTORY_ABI } from '../../../constants/abis/vault-factory-abi';
-import { ethereumAddressSchema } from '../../../validators/ethereum';
-import { initSonicProvider } from '../providers/sonic';
+import { VAULT_FACTORY_ABI } from '../../../../constants/abis/vault-factory-abi';
+import { ethereumAddressSchema } from '../../../../validators/ethereum';
+import { initSonicProvider } from '../../providers/sonic';
 
 // TODO Move this to a type
 interface MessageMetadata {
