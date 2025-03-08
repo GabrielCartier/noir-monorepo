@@ -1,6 +1,4 @@
 'use client';
-
-import { Button } from '@/src/components/ui/button';
 import {
   Dialog,
   DialogContent,
@@ -36,12 +34,14 @@ interface PortfolioDialogProps {
   tokenBalances: TokenBalances;
   totalValueInS: bigint;
   totalValueInUsd: number;
+  triggerProps?: React.ButtonHTMLAttributes<HTMLButtonElement>;
 }
 
 export function PortfolioDialog({
   tokenBalances,
   totalValueInS,
   totalValueInUsd,
+  triggerProps,
 }: PortfolioDialogProps) {
   const [isOpen, setIsOpen] = useState(false);
 
@@ -74,9 +74,9 @@ export function PortfolioDialog({
   return (
     <Dialog open={isOpen} onOpenChange={setIsOpen}>
       <DialogTrigger asChild={true}>
-        <Button variant="outline" className="w-full">
-          View Portfolio
-        </Button>
+        <button type="button" {...triggerProps}>
+          View All
+        </button>
       </DialogTrigger>
       <DialogContent className="sm:max-w-[600px]">
         <DialogHeader>

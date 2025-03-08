@@ -1,11 +1,7 @@
 'use client';
 
-import {
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-} from '@/src/components/ui/card';
+import { Button } from '@/src/components/ui/button';
+import { Card, CardContent } from '@/src/components/ui/card';
 import { clientEnv } from '@/src/lib/config/client-env';
 import { useCallback, useEffect, useState } from 'react';
 import { toast } from 'sonner';
@@ -284,19 +280,20 @@ export function VaultValue() {
     const balanceNumber = isUsd
       ? Number(balance)
       : Number(BigInt(balance)) / 1e18;
-    // Format with exactly 3 decimal places
+    // Format with 2 decimal places for USD, 3 for S
     return balanceNumber.toLocaleString('en-US', {
-      minimumFractionDigits: 3,
-      maximumFractionDigits: 3,
+      minimumFractionDigits: isUsd ? 2 : 3,
+      maximumFractionDigits: isUsd ? 2 : 3,
     });
   };
 
   if (isLoading) {
     return (
       <Card>
-        <CardHeader className="pb-3">
-          <CardTitle className="text-base">Vault Value</CardTitle>
-        </CardHeader>
+        <div className="p-6 pb-2 bg-muted/50">
+          <h2 className="text-2xl font-semibold">Vault Value</h2>
+        </div>
+        <div className="h-[1px] mx-6 bg-border" />
         <CardContent>
           <div className="flex items-center justify-center py-6">
             <div className="text-sm text-muted-foreground">Loading...</div>
@@ -309,9 +306,10 @@ export function VaultValue() {
   if (!vaultStatus?.exists || !vaultStatus?.vaultAddress) {
     return (
       <Card>
-        <CardHeader className="pb-3">
-          <CardTitle className="text-base">Vault Value</CardTitle>
-        </CardHeader>
+        <div className="p-6 pb-2 bg-muted/50">
+          <h2 className="text-2xl font-semibold">Vault Value</h2>
+        </div>
+        <div className="h-[1px] mx-6 bg-border" />
         <CardContent>
           <div className="flex flex-col items-center gap-4 py-6">
             <p className="text-sm text-muted-foreground">No vault found</p>
@@ -324,9 +322,9 @@ export function VaultValue() {
 
   return (
     <Card>
-      <CardHeader className="pb-3">
-        <CardTitle className="flex items-center justify-between text-base">
-          <span>Vault Value</span>
+      <div className="px-6 py-4 mb-4 bg-muted/50">
+        <div className="flex items-center justify-between">
+          <h2 className="text-2xl font-semibold">Vault Value</h2>
           <div className="flex items-center gap-2">
             <span className="text-sm text-muted-foreground">Agent Status</span>
             <button
@@ -354,55 +352,82 @@ export function VaultValue() {
               }}
             />
           </div>
-        </CardTitle>
-      </CardHeader>
+        </div>
+      </div>
       <CardContent className="space-y-6">
         <div>
-          <div className="flex items-baseline">
-            <div className="space-y-2">
-              <div>
-                <span className="text-3xl font-bold">
-                  {formatBalance(portfolioValue.totalValueInS.toString())} S
-                </span>
-                <span className="ml-2 rounded-full bg-green-500/10 px-2 py-0.5 text-xs text-green-500">
-                  +21%
-                </span>
-              </div>
-              <div className="text-sm text-muted-foreground">
-                ≈ $
+          <div className="flex items-baseline justify-between">
+            <div>
+              <div className="text-4xl font-bold">
+                $
                 {formatBalance(portfolioValue.totalValueInUsd.toString(), true)}
               </div>
+              <div className="flex items-center gap-2 mt-2">
+                <img
+                  src="/assets/sonic-logo.png"
+                  alt="Sonic"
+                  className="w-8 h-8 rounded-full bg-black"
+                />
+                <div>
+                  <div className="text-sm">
+                    {formatBalance(portfolioValue.totalValueInS.toString())} S
+                    ($
+                    {formatBalance(
+                      portfolioValue.totalValueInUsd.toString(),
+                      true,
+                    )}
+                    )
+                  </div>
+                  <div className="text-sm text-muted-foreground">Sonic</div>
+                </div>
+              </div>
+            </div>
+            <div>
+              <span className="rounded-full bg-green-500/10 px-2 py-0.5 text-xs text-green-500">
+                +21%
+              </span>
             </div>
           </div>
-          <p className="mt-1 text-sm text-muted-foreground">
-            Vault:{' '}
-            <a
-              href={`https://sonicscan.org/address/${vaultStatus.vaultAddress}`}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="hover:underline"
-            >
-              <code className="bg-muted px-1 py-0.5 rounded">
-                {vaultStatus.vaultAddress.slice(0, 6)}...
-                {vaultStatus.vaultAddress.slice(-4)}
-              </code>
-            </a>
-          </p>
         </div>
         <div className="space-y-2">
-          <div className="w-full">
-            <PortfolioDialog
-              tokenBalances={portfolioValue.tokenBalances}
-              totalValueInS={portfolioValue.totalValueInS}
-              totalValueInUsd={portfolioValue.totalValueInUsd}
-            />
+          <div className="flex justify-end mb-2">
+            <button
+              type="button"
+              className="text-sm underline hover:no-underline"
+              onClick={() => {
+                const portfolioDialog = document.querySelector(
+                  '[data-trigger="portfolio"]',
+                ) as HTMLButtonElement;
+                portfolioDialog?.click();
+              }}
+            >
+              View All
+            </button>
           </div>
           <div className="flex gap-2">
             <div className="flex-1">
+              <Button
+                variant="default"
+                className="w-full bg-green-500 hover:bg-green-600"
+                onClick={() => {
+                  const depositDialog = document.querySelector(
+                    '[data-trigger="deposit"]',
+                  ) as HTMLButtonElement;
+                  depositDialog?.click();
+                }}
+              >
+                fund
+              </Button>
               <DepositDialog
                 address={address as `0x${string}`}
                 vaultAddress={vaultStatus.vaultAddress}
                 onDepositSuccess={checkVaultStatus}
+                triggerProps={
+                  {
+                    className: 'hidden',
+                    'data-trigger': 'deposit',
+                  } as { className: string; 'data-trigger': string }
+                }
               />
             </div>
             <div className="flex-1">
@@ -415,6 +440,17 @@ export function VaultValue() {
             </div>
           </div>
         </div>
+        <PortfolioDialog
+          tokenBalances={portfolioValue.tokenBalances}
+          totalValueInS={portfolioValue.totalValueInS}
+          totalValueInUsd={portfolioValue.totalValueInUsd}
+          triggerProps={
+            {
+              className: 'hidden',
+              'data-trigger': 'portfolio',
+            } as { className: string; 'data-trigger': string }
+          }
+        />
       </CardContent>
     </Card>
   );

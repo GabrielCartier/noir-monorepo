@@ -76,8 +76,11 @@ export function WithdrawDialog({
   return (
     <Dialog open={isOpen} onOpenChange={setIsOpen}>
       <DialogTrigger asChild={true}>
-        <Button variant="outline" className="w-full">
-          Withdraw
+        <Button
+          variant="default"
+          className="w-full bg-gray-900 hover:bg-black/90 text-white"
+        >
+          withdraw
         </Button>
       </DialogTrigger>
       <DialogContent>

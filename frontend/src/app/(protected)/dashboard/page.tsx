@@ -1,6 +1,8 @@
 'use client';
 
+import { PortfolioChart } from '@/src/components/dashboard/portfolio-chart';
 import { useWallet } from '@/src/components/providers/wallet-provider';
+import { VaultValue } from '@/src/components/vault/vault-value';
 
 export default function Dashboard() {
   const { address } = useWallet();
@@ -11,12 +13,12 @@ export default function Dashboard() {
 
   return (
     <div className="container mx-auto p-4">
-      <h1 className="text-2xl font-bold mb-6">Dashboard</h1>
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {/* Dashboard content will go here */}
-        <div className="p-6 rounded-lg border bg-card">
-          <h2 className="text-lg font-semibold mb-2">Portfolio Overview</h2>
-          <p className="text-muted-foreground">Coming soon...</p>
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div className="lg:col-span-1">
+          <VaultValue />
+        </div>
+        <div className="lg:col-span-2">
+          <PortfolioChart />
         </div>
       </div>
     </div>

@@ -1,5 +1,6 @@
 'use client';
 
+import { Logo } from '@/src/components/base/logo';
 import { Tabs, TabsList, TabsTrigger } from '@/src/components/ui/tabs';
 import { WalletConnectButton } from '@/src/components/wallet/wallet-connect-button';
 import { usePathname, useRouter } from 'next/navigation';
@@ -20,7 +21,8 @@ export function Header() {
     <header className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
       <div className="container flex h-14 items-center">
         <div className="flex items-center">
-          <h1 className="ml-8 text-2xl font-bold">ThrustAI</h1>
+          <Logo className="ml-8 h-8 w-8" />
+          <h1 className="ml-2 text-2xl font-bold">ThrustAI</h1>
         </div>
 
         <div className="flex-1 flex justify-center">

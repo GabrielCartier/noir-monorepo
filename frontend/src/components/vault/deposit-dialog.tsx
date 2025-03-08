@@ -35,14 +35,20 @@ import {
 import { depositForVault } from '../../lib/services/vault-service';
 import { SONIC } from '../../lib/services/vault-service';
 import type { Token } from '../../types/token';
-import type { DepositDialogProps } from '../../types/vault';
+import type { DepositDialogProps as BaseDepositDialogProps } from '../../types/vault';
 import { useWallet } from '../providers/wallet-provider';
+
+interface DepositDialogProps
+  extends Omit<BaseDepositDialogProps, 'publicClient' | 'walletClient'> {
+  triggerProps?: React.ButtonHTMLAttributes<HTMLButtonElement>;
+}
 
 export function DepositDialog({
   address,
   vaultAddress,
   onDepositSuccess,
-}: Omit<DepositDialogProps, 'publicClient' | 'walletClient'>) {
+  triggerProps,
+}: DepositDialogProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [amount, setAmount] = useState('');
@@ -205,7 +211,7 @@ export function DepositDialog({
   return (
     <Dialog open={isOpen} onOpenChange={setIsOpen}>
       <DialogTrigger asChild={true}>
-        <Button variant="outline" className="w-full">
+        <Button variant="outline" className="w-full" {...triggerProps}>
           Deposit
         </Button>
       </DialogTrigger>
