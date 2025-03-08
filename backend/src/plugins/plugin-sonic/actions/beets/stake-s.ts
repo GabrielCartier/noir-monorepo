@@ -11,6 +11,7 @@ import {
 } from '@elizaos/core';
 import { type Log, erc20Abi, formatUnits, parseUnits } from 'viem';
 import { z } from 'zod';
+import { BEETS_STAKING_IMPLEMENTATION_ABI } from '../../../../constants/abis/beets-staking-abi';
 import { VAULT_ABI } from '../../../../constants/abis/vault-abi';
 import { wrappedSonicAbi } from '../../../../constants/abis/wrapped-sonic-abi';
 import {
@@ -212,133 +213,183 @@ async function stakeS(
         amount: bigIntAmount.toString(),
       });
 
+      // Check minimum deposit amount
       const beetsStakingService = getBeetsStakingService(
         publicClient,
         walletClient,
       );
-      const depositTx = await beetsStakingService.deposit(bigIntAmount);
-      const depositReceipt = await publicClient.waitForTransactionReceipt({
-        hash: depositTx,
-      });
-      elizaLogger.info('Successfully deposited S tokens', { depositTx });
 
-      // Get stS amount from deposit receipt
-      const stsToken = SUPPORTED_TOKENS_OBJECT.STAKED_SONIC;
-      if (!stsToken) {
-        throw new Error('Staked Sonic token not found in supported tokens');
+      try {
+        const minDeposit = (await publicClient.readContract({
+          address: beetsStakingService.getContractAddress(),
+          abi: BEETS_STAKING_IMPLEMENTATION_ABI,
+          functionName: 'MIN_DEPOSIT',
+        })) as bigint;
+
+        if (bigIntAmount < minDeposit) {
+          throw new Error(
+            `Deposit amount too small. Minimum required: ${formatUnits(minDeposit, decimals)} S`,
+          );
+        }
+
+        // Check if deposits are paused
+        const isDepositPaused = (await publicClient.readContract({
+          address: beetsStakingService.getContractAddress(),
+          abi: BEETS_STAKING_IMPLEMENTATION_ABI,
+          functionName: 'depositPaused',
+        })) as boolean;
+
+        if (isDepositPaused) {
+          throw new Error('Deposits are currently paused');
+        }
+
+        const stakeTx = await beetsStakingService.deposit(bigIntAmount);
+        const stakeReceipt = await publicClient.waitForTransactionReceipt({
+          hash: stakeTx,
+        });
+
+        if (stakeReceipt.status !== 'success') {
+          throw new Error('Deposit transaction failed');
+        }
+
+        elizaLogger.info('Successfully staked S tokens', { stakeTx });
+
+        // Get stS amount from stake receipt
+        const stsToken = SUPPORTED_TOKENS_OBJECT.STAKED_SONIC;
+        if (!stsToken) {
+          throw new Error('Staked Sonic token not found in supported tokens');
+        }
+        const stsTokenAddress = stsToken.address as `0x${string}`;
+
+        elizaLogger.info('Looking for stS transfer event', {
+          stsTokenAddress,
+          stakeTx,
+          logsCount: stakeReceipt.logs.length,
+        });
+
+        // Find Transfer event to agent address to get stS amount
+        const transferEvent = stakeReceipt.logs.find(
+          (log: Log) =>
+            log.address.toLowerCase() === stsTokenAddress.toLowerCase() &&
+            log.topics[0] ===
+              '0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef' && // Transfer event signature
+            (log.topics[2] as `0x${string}`)
+              .toLowerCase()
+              .includes(agentAddress.toLowerCase().slice(2)), // To address matches agent
+        );
+
+        if (!transferEvent) {
+          elizaLogger.error('Transfer event not found in logs', {
+            stakeTx,
+            logs: stakeReceipt.logs.map((log: Log) => ({
+              address: log.address,
+              topics: log.topics,
+              data: log.data,
+            })),
+          });
+          throw new Error('Could not find stS transfer event in stake receipt');
+        }
+
+        const stsAmount = BigInt(transferEvent.data);
+        elizaLogger.info('Found stS amount from transfer event', {
+          stsAmount: stsAmount.toString(),
+        });
+
+        // 4. Approve vault to spend $stS
+        elizaLogger.info('Approving vault to spend stS', {
+          vault: userVaultAddress,
+          amount: stsAmount.toString(),
+        });
+
+        const { request: approveVaultRequest } =
+          await publicClient.simulateContract({
+            account: agentAddress,
+            address: stsTokenAddress,
+            abi: erc20Abi,
+            functionName: 'approve',
+            args: [userVaultAddress, stsAmount],
+          });
+
+        const approveVaultTx = await walletClient.writeContract({
+          ...approveVaultRequest,
+          account: walletClient.account,
+        });
+        await publicClient.waitForTransactionReceipt({ hash: approveVaultTx });
+        elizaLogger.info('Successfully approved vault spending', {
+          approveVaultTx,
+        });
+
+        // 5. Transfer $stS back to the vault
+        elizaLogger.info('Depositing stS back to vault', {
+          vault: userVaultAddress,
+          amount: stsAmount.toString(),
+        });
+
+        const { request: depositVaultRequest } =
+          await publicClient.simulateContract({
+            account: agentAddress,
+            address: userVaultAddress,
+            abi: VAULT_ABI,
+            functionName: 'deposit',
+            args: [stsTokenAddress, stsAmount],
+          });
+
+        const depositVaultTx = await walletClient.writeContract({
+          ...depositVaultRequest,
+          account: walletClient.account,
+        });
+        await publicClient.waitForTransactionReceipt({ hash: depositVaultTx });
+        elizaLogger.info('Successfully deposited stS to vault', {
+          depositVaultTx,
+        });
+
+        elizaLogger.info('Successfully completed stakeS operation', {
+          userId,
+          amount,
+          stsAmount: stsAmount.toString(),
+          transactionHash: depositVaultTx,
+          withdrawHash,
+          unwrapHash,
+          stakeTx,
+        });
+
+        return {
+          success: true,
+          stsAmount: stsAmount.toString(),
+          transactionHash: depositVaultTx,
+        };
+      } catch (txError) {
+        // Log detailed transaction error
+        elizaLogger.error('Transaction failed in stakeS', {
+          error: txError instanceof Error ? txError.message : String(txError),
+          errorObject: txError,
+          step: txError instanceof Error ? txError.stack : undefined,
+          addresses: {
+            sonicTokenAddress,
+            userVaultAddress,
+            signer: agentAddress,
+          },
+        });
+        throw txError;
       }
-      const stsTokenAddress = stsToken.address as `0x${string}`;
-
-      elizaLogger.info('Looking for stS transfer event', {
-        stsTokenAddress,
-        depositTx,
-        logsCount: depositReceipt.logs.length,
-      });
-
-      // Find Transfer event to agent address to get stS amount
-      const transferEvent = depositReceipt.logs.find(
-        (log: Log) =>
-          log.address.toLowerCase() === stsTokenAddress.toLowerCase() &&
-          log.topics[0] ===
-            '0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef' && // Transfer event signature
-          (log.topics[2] as `0x${string}`)
-            .toLowerCase()
-            .includes(agentAddress.toLowerCase().slice(2)), // To address matches agent
-      );
-
-      if (!transferEvent) {
-        elizaLogger.error('Transfer event not found in logs', {
-          depositTx,
-          logs: depositReceipt.logs.map((log: Log) => ({
-            address: log.address,
-            topics: log.topics,
-            data: log.data,
-          })),
-        });
-        throw new Error('Could not find stS transfer event in deposit receipt');
-      }
-
-      const stsAmount = BigInt(transferEvent.data);
-      elizaLogger.info('Found stS amount from transfer event', {
-        stsAmount: stsAmount.toString(),
-      });
-
-      // 4. Approve vault to spend $stS
-      elizaLogger.info('Approving vault to spend stS', {
-        vault: userVaultAddress,
-        amount: stsAmount.toString(),
-      });
-
-      const { request: approveVaultRequest } =
-        await publicClient.simulateContract({
-          account: agentAddress,
-          address: stsTokenAddress,
-          abi: erc20Abi,
-          functionName: 'approve',
-          args: [userVaultAddress, stsAmount],
-        });
-
-      const approveVaultTx = await walletClient.writeContract({
-        ...approveVaultRequest,
-        account: walletClient.account,
-      });
-      await publicClient.waitForTransactionReceipt({ hash: approveVaultTx });
-      elizaLogger.info('Successfully approved vault spending', {
-        approveVaultTx,
-      });
-
-      // 5. Transfer $stS back to the vault
-      elizaLogger.info('Depositing stS back to vault', {
-        vault: userVaultAddress,
-        amount: stsAmount.toString(),
-      });
-
-      const { request: depositVaultRequest } =
-        await publicClient.simulateContract({
-          account: agentAddress,
-          address: userVaultAddress,
-          abi: VAULT_ABI,
-          functionName: 'deposit',
-          args: [stsTokenAddress, stsAmount],
-        });
-
-      const depositVaultTx = await walletClient.writeContract({
-        ...depositVaultRequest,
-        account: walletClient.account,
-      });
-      await publicClient.waitForTransactionReceipt({ hash: depositVaultTx });
-      elizaLogger.info('Successfully deposited stS to vault', {
-        depositVaultTx,
-      });
-
-      elizaLogger.info('Successfully completed stakeS operation', {
-        userId,
-        amount,
-        stsAmount: stsAmount.toString(),
-        transactionHash: depositVaultTx,
-        withdrawHash,
-        unwrapHash,
-        depositTx,
-      });
-
-      return {
-        success: true,
-        stsAmount: stsAmount.toString(),
-        transactionHash: depositVaultTx,
-      };
-    } catch (txError) {
-      // Log detailed transaction error
-      elizaLogger.error('Transaction failed in stakeS', {
-        error: txError instanceof Error ? txError.message : String(txError),
-        errorObject: txError,
-        step: txError instanceof Error ? txError.stack : undefined,
-        addresses: {
-          sonicTokenAddress,
-          userVaultAddress,
-          signer: agentAddress,
+    } catch (error) {
+      // Log the full error context
+      elizaLogger.error('Error in stakeS operation', {
+        error: error instanceof Error ? error.message : String(error),
+        errorObject: error,
+        stack: error instanceof Error ? error.stack : undefined,
+        params: {
+          userId: params.userId,
+          userVaultAddress: params.userVaultAddress,
+          amount: params.amount,
+          signer: params.agentAddress,
         },
       });
-      throw txError;
+      return {
+        success: false,
+        error:
+          error instanceof Error ? error.message : 'Unknown error occurred',
+      };
     }
   } catch (error) {
     // Log the full error context

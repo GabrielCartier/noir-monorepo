@@ -21,7 +21,7 @@ export class BeetsStakingService {
       address: env.SONIC_STAKING_ADDRESS,
       abi: BEETS_STAKING_ABI,
       functionName: 'deposit',
-      args: [amount],
+      value: amount,
     });
 
     const hash = await this.walletClient.writeContract(request);
@@ -29,31 +29,69 @@ export class BeetsStakingService {
     return hash;
   }
 
-  async getStsAmount(sAmount: bigint): Promise<bigint> {
-    // This is a simplified version. In reality, you would need to calculate
-    // the exact amount based on the current exchange rate and any fees
-    return sAmount;
-  }
-  async getRewards(): Promise<bigint> {
-    const rewards = (await this.publicClient.readContract({
+  async withdraw(
+    withdrawId: bigint,
+    emergency = false,
+  ): Promise<`0x${string}`> {
+    const { request } = await this.publicClient.simulateContract({
+      account: this.walletClient.account,
       address: env.SONIC_STAKING_ADDRESS,
       abi: BEETS_STAKING_ABI,
-      functionName: 'getRewards',
-    })) as bigint;
-    return rewards;
+      functionName: 'withdraw',
+      args: [withdrawId, emergency],
+    });
+
+    const hash = await this.walletClient.writeContract(request);
+    await this.publicClient.waitForTransactionReceipt({ hash });
+    return hash;
   }
 
-  async claimRewards(): Promise<`0x${string}`> {
+  async claimRewards(validatorIds: bigint[]): Promise<`0x${string}`> {
     const { request } = await this.publicClient.simulateContract({
       account: this.walletClient.account,
       address: env.SONIC_STAKING_ADDRESS,
       abi: BEETS_STAKING_ABI,
       functionName: 'claimRewards',
+      args: [validatorIds],
     });
 
     const hash = await this.walletClient.writeContract(request);
     await this.publicClient.waitForTransactionReceipt({ hash });
     return hash;
+  }
+
+  async convertToAssets(sharesAmount: bigint): Promise<bigint> {
+    return (await this.publicClient.readContract({
+      address: env.SONIC_STAKING_ADDRESS,
+      abi: BEETS_STAKING_ABI,
+      functionName: 'convertToAssets',
+      args: [sharesAmount],
+    })) as bigint;
+  }
+
+  async convertToShares(assetAmount: bigint): Promise<bigint> {
+    return (await this.publicClient.readContract({
+      address: env.SONIC_STAKING_ADDRESS,
+      abi: BEETS_STAKING_ABI,
+      functionName: 'convertToShares',
+      args: [assetAmount],
+    })) as bigint;
+  }
+
+  async totalAssets(): Promise<bigint> {
+    return (await this.publicClient.readContract({
+      address: env.SONIC_STAKING_ADDRESS,
+      abi: BEETS_STAKING_ABI,
+      functionName: 'totalAssets',
+    })) as bigint;
+  }
+
+  async totalDelegated(): Promise<bigint> {
+    return (await this.publicClient.readContract({
+      address: env.SONIC_STAKING_ADDRESS,
+      abi: BEETS_STAKING_ABI,
+      functionName: 'totalDelegated',
+    })) as bigint;
   }
 }
 

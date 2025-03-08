@@ -27,6 +27,7 @@ import {
 } from '@/src/components/ui/tabs';
 import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
+import { formatEther, parseEther } from 'viem';
 import {
   getTokenBalances,
   transferToken,
@@ -49,13 +50,29 @@ export function DepositDialog({
   const [tokenBalances, setTokenBalances] = useState<
     { token: Token; balance: bigint }[]
   >([]);
+  const [nativeBalance, setNativeBalance] = useState<bigint>(0n);
   const { publicClient, ensureCorrectChain, walletClient } = useWallet();
 
   useEffect(() => {
     if (isOpen) {
       checkBalances();
+      checkNativeBalance();
     }
   }, [isOpen]);
+
+  const checkNativeBalance = async () => {
+    if (!address || !publicClient) {
+      return;
+    }
+
+    try {
+      const balance = await publicClient.getBalance({ address });
+      setNativeBalance(balance);
+    } catch (error) {
+      console.error('Error checking native balance:', error);
+      toast.error('Failed to check S balance');
+    }
+  };
 
   const checkBalances = async () => {
     try {
@@ -81,15 +98,12 @@ export function DepositDialog({
     setIsLoading(true);
     try {
       await ensureCorrectChain();
-      const amountInWei = BigInt(Math.floor(Number(amount) * 1e18));
+      const amountInWei = parseEther(amount);
 
-      // Check if user has sufficient balance
-      const sonicBalance = tokenBalances.find(
-        (b) => b.token.symbol === 'S',
-      )?.balance;
-      if (sonicBalance && sonicBalance < amountInWei) {
+      // Check if user has sufficient native balance
+      if (nativeBalance < amountInWei) {
         toast.error(
-          `Insufficient Sonic token balance. You have ${Number(sonicBalance) / 1e18} S, but need ${amount} S`,
+          `Insufficient S balance. You have ${formatEther(nativeBalance)} S, but need ${amount} S`,
         );
         return;
       }
@@ -105,7 +119,7 @@ export function DepositDialog({
       toast.success('Successfully deposited S tokens to vault');
       setIsOpen(false);
       onDepositSuccess();
-      checkBalances();
+      checkNativeBalance();
     } catch (error) {
       console.error('Error depositing:', error);
       if (error instanceof Error) {
@@ -222,16 +236,7 @@ export function DepositDialog({
                 />
               </div>
               <div className="text-sm text-muted-foreground">
-                {tokenBalances.find((b) => b.token.symbol === 'S') && (
-                  <p>
-                    Available S balance:{' '}
-                    {Number(
-                      tokenBalances.find((b) => b.token.symbol === 'S')
-                        ?.balance ?? 0n,
-                    ) / 1e18}{' '}
-                    S
-                  </p>
-                )}
+                <p>Available S balance: {formatEther(nativeBalance)} S</p>
               </div>
               <DialogFooter>
                 <Button onClick={handleDirectDeposit} disabled={isLoading}>

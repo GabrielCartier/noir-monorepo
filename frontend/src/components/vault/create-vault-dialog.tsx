@@ -102,7 +102,9 @@ export function CreateVaultDialog({ onVaultCreated }: CreateVaultDialogProps) {
                   <p className="text-sm text-muted-foreground">
                     Your vault will be created for address:{' '}
                     <code className="bg-muted px-1 py-0.5 rounded">
-                      {address.slice(0, 6)}...{address.slice(-4)}
+                      {address
+                        ? `${address.slice(0, 6)}...${address.slice(-4)}`
+                        : 'Loading...'}
                     </code>
                   </p>
                   {vaultInfo && (
@@ -114,15 +116,17 @@ export function CreateVaultDialog({ onVaultCreated }: CreateVaultDialogProps) {
                         <p className="text-sm text-muted-foreground">
                           Vault Address:{' '}
                           <code className="bg-muted px-1 py-0.5 rounded">
-                            {vaultInfo.address.slice(0, 6)}...
-                            {vaultInfo.address.slice(-4)}
+                            {vaultInfo.address
+                              ? `${vaultInfo.address.slice(0, 6)}...${vaultInfo.address.slice(-4)}`
+                              : 'N/A'}
                           </code>
                         </p>
                         <p className="text-sm text-muted-foreground">
                           Transaction:{' '}
                           <code className="bg-muted px-1 py-0.5 rounded">
-                            {vaultInfo.transactionHash.slice(0, 6)}...
-                            {vaultInfo.transactionHash.slice(-4)}
+                            {vaultInfo.transactionHash
+                              ? `${vaultInfo.transactionHash.slice(0, 6)}...${vaultInfo.transactionHash.slice(-4)}`
+                              : 'N/A'}
                           </code>
                         </p>
                       </div>
@@ -137,8 +141,9 @@ export function CreateVaultDialog({ onVaultCreated }: CreateVaultDialogProps) {
                     <p className="text-sm text-muted-foreground">
                       Vault Address:{' '}
                       <code className="bg-muted px-1 py-0.5 rounded">
-                        {existingVault.address.slice(0, 6)}...
-                        {existingVault.address.slice(-4)}
+                        {existingVault?.address
+                          ? `${existingVault.address.slice(0, 6)}...${existingVault.address.slice(-4)}`
+                          : 'N/A'}
                       </code>
                     </p>
                   </div>

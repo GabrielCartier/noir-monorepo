@@ -18,6 +18,7 @@ import {
 import { Elysia } from 'elysia';
 import postgresAdapter from '../database';
 import { initSonicProvider } from '../providers/sonic';
+import { dexScreenerService } from '../services/dexscreener-service';
 import {
   createVault,
   getVault,
@@ -149,6 +150,64 @@ export class ApiClient {
   }
 
   private setupRoutes() {
+    // Add token price check endpoint
+    this.app.post('/tokens/prices', async (context) => {
+      try {
+        elizaLogger.info('[ApiClient] Token prices endpoint called');
+        const body = context.body as {
+          chainId: string;
+          tokenAddresses: string[];
+        };
+
+        if (
+          !body.chainId ||
+          !body.tokenAddresses ||
+          !body.tokenAddresses.length
+        ) {
+          elizaLogger.error(
+            '[ApiClient] Missing required parameters in request',
+          );
+          return Response.json(
+            { error: 'Missing required parameters' },
+            { status: 400 },
+          );
+        }
+
+        const tokenPairs = await dexScreenerService.getTokenPairs(
+          body.chainId,
+          body.tokenAddresses,
+        );
+
+        // Extract native prices for each token
+        const prices = tokenPairs.reduce(
+          (acc, pair) => {
+            // Use baseToken address as the key
+            acc[pair.baseToken.address] = {
+              priceNative: pair.priceNative,
+              priceUsd: pair.priceUsd,
+              symbol: pair.baseToken.symbol,
+            };
+            return acc;
+          },
+          {} as Record<
+            string,
+            { priceNative: string; priceUsd: string; symbol: string }
+          >,
+        );
+
+        return Response.json({ prices });
+      } catch (error) {
+        elizaLogger.error('[ApiClient] Error fetching token prices:', error);
+        return Response.json(
+          {
+            error:
+              error instanceof Error ? error.message : 'Unknown error occurred',
+          },
+          { status: 500 },
+        );
+      }
+    });
+
     // Add vault check endpoint
     this.app.post('/vault/check', async (context) => {
       try {
