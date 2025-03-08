@@ -20,6 +20,14 @@ export const SUPPORTED_TOKENS: Token[] = [
     decimals: 18,
   },
   {
+    name: 'Wrapped Sonic',
+    symbol: 'wS',
+    address: '0x039e2fB66102314Ce7b64Ce5Ce3E5183bc94aD38',
+    logoUrl:
+      'https://coin-images.coingecko.com/coins/images/52857/small/wrapped_sonic.png?1734536585',
+    decimals: 18,
+  },
+  {
     name: 'Bridged USDC (Sonic Labs)',
     symbol: 'USDC',
     address: '0x29219dd400f2Bf60E5a23d13Be72B486D4038894',

@@ -21,12 +21,12 @@ import {
 } from 'viem';
 import { privateKeyToAccount } from 'viem/accounts';
 import { sonic } from 'viem/chains';
+import { SUPPORTED_TOKENS } from '../../../constants/supported-tokens';
 import { mapSiloToSiloVaultData } from '../../../mappers/silo-mapper';
 import { MOCK_WALLET_BALANCE } from '../../../mock/wallet-balance';
 import { fetchSiloMarkets } from '../../../services/silo-service';
 import type { SiloVaultData } from '../../../types/common/silo-vault';
 import { SILO_ABI } from '../constants/silo-abi';
-import { SUPPORTED_TOKENS } from '../constants/supported-tokens';
 import type { MessageMetadata } from '../types/message-metadata';
 import type { PositionInfo } from '../types/position-info';
 import type { SonicPortfolio } from '../types/sonic-portfolio';
@@ -357,7 +357,8 @@ export const initSonicProvider = (runtime: IAgentRuntime) => {
     vaultFactoryAddress,
   );
 };
-const sonicProvider: Provider = {
+
+export const sonicProvider: Provider = {
   get: async (
     runtime: IAgentRuntime,
     message: Memory,
@@ -372,5 +373,3 @@ const sonicProvider: Provider = {
     }
   },
 };
-
-export { sonicProvider };

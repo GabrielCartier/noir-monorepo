@@ -74,7 +74,7 @@ export async function fetchSiloMarkets(): Promise<ExtendedSiloMarketsResponse> {
     );
 
     elizaLogger.info(
-      '[SiloService] Successfully enriched markets with silo token addresses',
+      '[SiloService] Successfully enriched markets with silo token addresses.',
     );
     return enrichedMarkets;
   } catch (error) {

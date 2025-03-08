@@ -44,17 +44,17 @@ Otherwise, respond with a JSON markdown block containing only the extracted valu
 `;
 
 // 1. First Action: Find Valid Vaults for Token
-export const findValidVaultsTemplate = `Given the last message from the user and only that message, extract the token (symbol, address or name) they want to deposit.
+export const findValidVaultsTemplate = `Given the last message from the user and only that message, extract the token (symbol, address or name) and the amount they want to deposit.
 {{recentMessages}}
 
-For the message "Deposit 1 wS in a silo vault":
-1. Token to look for is "wS"
+For the message "Deposit 1 S in a silo vault":
+1. Token to look for is "S"
 2. Amount is 1
 
 Using the siloVaults data below:
 1. Find all vaults where either:
-   - Symbol exactly matches "wS"
-   - Name contains "wS"
+   - Symbol exactly matches "S"
+   - Name contains "S"
    - Token Address matches (if an address was provided)
 2. For each matching vault, map it to this format:
    - siloAddress: copy the "Silo Token Address" field exactly
@@ -68,7 +68,7 @@ Using the siloVaults data below:
 If no matching vaults are found, return:
 \`\`\`json
 {
-    "error": "No vaults found for token wS"
+    "error": "No vaults found for token S"
 }
 \`\`\`
 
