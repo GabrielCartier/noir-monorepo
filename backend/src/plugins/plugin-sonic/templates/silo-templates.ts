@@ -68,7 +68,7 @@ Using the siloVaults data below:
 If no matching vaults are found, return:
 \`\`\`json
 {
-    "error": "No vaults found for token S"
+    "error": "No verified vaults found for token S"
 }
 \`\`\`
 
@@ -117,6 +117,37 @@ Validate the deposit of {{amount}} {{tokenSymbol}} using:
     "userVaultAddress": string,
     "siloConfigAddress": string,
     "error": string | null
+}
+\`\`\`
+`;
+
+// Template for finding vaults with active positions
+export const findVaultsWithPositionsTemplate = `Given the last message from the user and only that message, find all vaults where the user has an active position.
+
+{{recentMessages}}
+{{siloVaults}}
+{{userVaultAddress}}
+
+For each vault in siloVaults:
+1. Look for the "Silo Token Address" field in each vault entry
+2. Include that address in the response if it exists
+
+Additionally, include these specific silo addresses if they exist:
+- 0xB2fCA0e72DF1B7f844E439668dc3A58646C7D65a
+
+If no vaults are found, return:
+\`\`\`json
+{
+    "error": "No vaults with active positions found"
+}
+\`\`\`
+
+Otherwise return:
+\`\`\`json
+{
+    "vaults": [{
+        "siloAddress": string  // Use the "Silo Token Address" field from each vault or the additional addresses
+    }]
 }
 \`\`\`
 `;

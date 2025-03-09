@@ -1,8 +1,8 @@
 import { elizaLogger } from '@elizaos/core';
 import { erc20Abi } from 'viem';
-import { withdrawFromVault } from '../../../services/vault-service';
 import { SILO_ABI } from '../constants/silo-abi';
 import type { BaseParams, DepositParams } from '../types/silo-service';
+
 export async function withdrawAll(params: BaseParams) {
   const { walletClient, publicClient, siloAddress, vaultAddress } = params;
   const agentAddress = walletClient.account?.address;
@@ -13,21 +13,20 @@ export async function withdrawAll(params: BaseParams) {
     };
   }
 
+  // Get shares balance - we assume the agent already has the shares (transferred from vault)
   const shares = await publicClient.readContract({
     address: siloAddress,
     abi: SILO_ABI,
     functionName: 'balanceOf',
-    args: [vaultAddress],
+    args: [agentAddress],
   });
 
-  await withdrawFromVault({
-    publicClient,
-    walletClient,
-    vaultAddress,
-    tokenAddress: siloAddress,
-    amount: shares,
-    userAddress: agentAddress,
-  });
+  if (shares === 0n) {
+    return {
+      success: false,
+      error: 'No shares available to redeem',
+    };
+  }
 
   const { request } = await publicClient.simulateContract({
     account: walletClient.account,
