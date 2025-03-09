@@ -512,6 +512,10 @@ export const depositAction: Action = {
       // Add the sonic context to the state itself for template access
       currentState.siloVaults = sonicContext;
 
+      callback?.({
+        text: 'Finding valid vaults...',
+      });
+
       // Step 1: Find valid vaults
       const findVaultsContext = composeContext({
         state: currentState,
@@ -569,22 +573,86 @@ export const depositAction: Action = {
         return false;
       }
 
-      if (!response.amount) {
+      // Step 2: Select the best vault - find highest APY
+      const selectedVault = response.vaults.reduce((max, current) =>
+        current.apy > max.apy ? current : max,
+      );
+
+      elizaLogger.info('Selected vault details', {
+        selected: selectedVault,
+      });
+
+      // Step 3: Direct validation without template
+      const validatedDeposit = {
+        amount: response.amount?.toString() || '0',
+        siloAddress: selectedVault.siloAddress,
+        tokenAddress: selectedVault.tokenAddress,
+        userVaultAddress: vaultAddress,
+        siloConfigAddress: selectedVault.configAddress,
+        error: null,
+      };
+
+      elizaLogger.info('Validation result', {
+        validated: validatedDeposit,
+        selectedVault,
+        originalVaults: response.vaults.map((v) => v.siloAddress),
+      });
+
+      if (!validatedDeposit.amount || Number(validatedDeposit.amount) <= 0) {
         if (callback) {
           callback({
-            text: 'Could not determine the amount to deposit',
+            text: `Invalid amount: ${validatedDeposit.amount}`,
+            content: {
+              success: false,
+              error: 'Invalid amount',
+              validation: validatedDeposit,
+            },
           });
         }
         return false;
       }
 
+      if (callback) {
+        callback({
+          text: `Deposit parameters validated successfully:
+- Amount: ${validatedDeposit.amount}
+- Silo Address: ${validatedDeposit.siloAddress}
+- Token Address: ${validatedDeposit.tokenAddress}
+- User Vault: ${validatedDeposit.userVaultAddress}
+Preparing to initiate deposit...`,
+          content: {
+            success: true,
+            validation: validatedDeposit,
+          },
+        });
+      }
+
       const depositContent = {
-        siloAddress: response.vaults[0].siloAddress,
-        tokenAddress: response.vaults[0].tokenAddress,
-        amount: response.amount,
-        userVaultAddress: vaultAddress,
+        siloAddress: validatedDeposit.siloAddress,
+        tokenAddress: validatedDeposit.tokenAddress,
+        amount: Number.parseFloat(validatedDeposit.amount),
+        userVaultAddress: validatedDeposit.userVaultAddress,
         userId: message.userId,
       };
+
+      elizaLogger.info('Proceeding with deposit', {
+        selectedVault: {
+          address: selectedVault.siloAddress,
+          apy: selectedVault.apy,
+        },
+        amount: depositContent.amount,
+        token: depositContent.tokenAddress,
+      });
+
+      if (callback) {
+        callback({
+          text: 'Initiating deposit transaction...',
+          content: {
+            success: true,
+            status: 'initiating',
+          },
+        });
+      }
 
       const depositResponse = await deposit(
         {
@@ -597,11 +665,12 @@ export const depositAction: Action = {
 
       if (callback) {
         callback({
-          text: `Successfully deposited ${depositContent.amount} tokens to ${depositContent.siloAddress}\nTransaction Hash: ${depositResponse.transactionHash}`,
+          text: `Successfully deposited ${depositContent.amount} tokens to vault with ${selectedVault.apy}% APY\nTransaction Hash: ${depositResponse.transactionHash}`,
           content: {
             success: true,
             hash: depositResponse.transactionHash,
             recipient: depositContent.siloAddress,
+            apy: selectedVault.apy,
             action: 'DEPOSIT',
           },
         });
