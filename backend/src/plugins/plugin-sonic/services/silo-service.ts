@@ -3,7 +3,7 @@ import { erc20Abi } from 'viem';
 import { SILO_ABI } from '../constants/silo-abi';
 import type { BaseParams, DepositParams } from '../types/silo-service';
 
-export async function withdrawAll(params: BaseParams) {
+export async function withdraw(params: BaseParams) {
   const { walletClient, publicClient, siloAddress, vaultAddress } = params;
   const agentAddress = walletClient.account?.address;
   if (!agentAddress) {
@@ -93,13 +93,13 @@ export async function deposit(params: DepositParams) {
   });
   await publicClient.waitForTransactionReceipt({ hash: approveHash });
 
-  // Deposit into silo
+  // Deposit into silo - using borrowable deposit function
   const { request } = await publicClient.simulateContract({
     account: walletClient.account,
     address: siloAddress,
     abi: SILO_ABI,
     functionName: 'deposit',
-    args: [amount, vaultAddress, 0], // 0 = REGULAR collateral type
+    args: [amount, vaultAddress, 1], // 1 = BORROWABLE collateral type
   });
 
   const hash = await walletClient.writeContract(request);
@@ -107,6 +107,9 @@ export async function deposit(params: DepositParams) {
 
   elizaLogger.info('Silo deposit receipt', {
     receipt: hash,
+    amount: amount.toString(),
+    vaultAddress,
+    collateralType: 'BORROWABLE',
   });
 
   return {
@@ -118,22 +121,87 @@ export async function deposit(params: DepositParams) {
 export async function getPositionInfo(params: BaseParams) {
   const { publicClient, siloAddress, vaultAddress } = params;
 
-  const shares = await publicClient.readContract({
-    address: siloAddress,
-    abi: SILO_ABI,
-    functionName: 'balanceOf',
-    args: [vaultAddress],
+  elizaLogger.info('Checking position info', {
+    siloAddress,
+    vaultAddress,
   });
 
-  const amount = await publicClient.readContract({
-    address: siloAddress,
-    abi: SILO_ABI,
-    functionName: 'previewRedeem',
-    args: [shares],
-  });
+  try {
+    elizaLogger.debug('Attempting to read balanceOf', {
+      contract: siloAddress,
+      owner: vaultAddress,
+    });
 
-  return {
-    shares,
-    amount,
-  };
+    const shares = await publicClient.readContract({
+      address: siloAddress,
+      abi: SILO_ABI,
+      functionName: 'balanceOf',
+      args: [vaultAddress],
+    });
+
+    elizaLogger.info('Balance check result', {
+      siloAddress,
+      vaultAddress,
+      shares: shares.toString(),
+    });
+
+    if (shares === 0n) {
+      elizaLogger.info('No shares found in vault', {
+        siloAddress,
+        vaultAddress,
+      });
+      return {
+        shares: 0n,
+        amount: 0n,
+      };
+    }
+
+    try {
+      elizaLogger.debug('Attempting previewRedeem', {
+        contract: siloAddress,
+        shares: shares.toString(),
+      });
+
+      const amount = await publicClient.readContract({
+        address: siloAddress,
+        abi: SILO_ABI,
+        functionName: 'previewRedeem',
+        args: [shares],
+      });
+
+      elizaLogger.info('Position info retrieved successfully', {
+        siloAddress,
+        vaultAddress,
+        shares: shares.toString(),
+        amount: amount.toString(),
+      });
+
+      return {
+        shares,
+        amount,
+      };
+    } catch (previewError) {
+      elizaLogger.warn('Failed to preview redeem amount', {
+        error: previewError,
+        siloAddress,
+        shares: shares.toString(),
+      });
+      return {
+        shares,
+        amount: 0n,
+      };
+    }
+  } catch (error) {
+    elizaLogger.error('Error getting position info', {
+      error: error instanceof Error ? error.message : String(error),
+      errorObject: error,
+      siloAddress,
+      vaultAddress,
+    });
+    // Instead of throwing, return zero values
+    return {
+      shares: 0n,
+      amount: 0n,
+    };
+  }
 }

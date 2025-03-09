@@ -20,7 +20,7 @@ import { VAULT_ABI } from '../../constants';
 import { initSonicProvider, sonicProvider } from '../../providers/sonic';
 import {
   getPositionInfo,
-  withdrawAll as withdrawFromSilo,
+  withdraw as withdrawFromSilo,
 } from '../../services/silo-service';
 import { findVaultsWithPositionsTemplate } from '../../templates/silo-templates';
 import type { MessageMetadata } from '../../types/message-metadata';
@@ -62,7 +62,7 @@ async function withdraw(params: ExtendedWithdrawalContent) {
 
   try {
     // 1. Get position info to see how many shares we have
-    const { shares, amount } = await getPositionInfo({
+    const { shares, amount: expectedAmount } = await getPositionInfo({
       publicClient,
       walletClient,
       siloAddress: siloAddress as `0x${string}`,
@@ -78,65 +78,171 @@ async function withdraw(params: ExtendedWithdrawalContent) {
 
     elizaLogger.info('Found shares to withdraw', {
       shares: shares.toString(),
-      expectedAmount: amount.toString(),
       siloAddress,
+      expectedAmount: expectedAmount.toString(),
       vaultAddress: userVaultAddress,
     });
 
-    // 1. Withdraw shares from vault to agent
-    const { request: withdrawSharesRequest } =
-      await publicClient.simulateContract({
-        account: agentAddress,
-        address: userVaultAddress as `0x${string}`,
-        abi: VAULT_ABI,
-        functionName: 'withdraw',
-        args: [siloAddress as `0x${string}`, shares],
+    // Add safety check for previewRedeem
+    let sharesToWithdraw = shares;
+    let previewAmount: bigint;
+
+    try {
+      previewAmount = await publicClient.readContract({
+        address: siloAddress as `0x${string}`,
+        abi: [
+          {
+            inputs: [{ name: '_shares', type: 'uint256' }],
+            name: 'previewRedeem',
+            outputs: [{ name: '', type: 'uint256' }],
+            stateMutability: 'view',
+            type: 'function',
+          },
+        ],
+        functionName: 'previewRedeem',
+        args: [sharesToWithdraw],
       });
 
-    const withdrawSharesHash = await walletClient.writeContract({
-      ...withdrawSharesRequest,
-      account: walletClient.account,
-    });
+      elizaLogger.info('Preview redeem successful', {
+        shares: sharesToWithdraw.toString(),
+        previewAmount: previewAmount.toString(),
+      });
+    } catch (previewError) {
+      elizaLogger.error('Preview redeem failed', {
+        error: previewError,
+        shares: sharesToWithdraw.toString(),
+      });
 
-    const withdrawSharesReceipt = await publicClient.waitForTransactionReceipt({
-      hash: withdrawSharesHash,
-    });
+      // Try with a slightly reduced share amount
+      sharesToWithdraw = (shares * 95n) / 100n; // Try with 95% of shares
+      try {
+        previewAmount = await publicClient.readContract({
+          address: siloAddress as `0x${string}`,
+          abi: [
+            {
+              inputs: [{ name: '_shares', type: 'uint256' }],
+              name: 'previewRedeem',
+              outputs: [{ name: '', type: 'uint256' }],
+              stateMutability: 'view',
+              type: 'function',
+            },
+          ],
+          functionName: 'previewRedeem',
+          args: [sharesToWithdraw],
+        });
 
-    if (withdrawSharesReceipt.status !== 'success') {
-      throw new Error('Failed to withdraw shares from vault');
+        elizaLogger.info('Preview redeem successful with reduced shares', {
+          originalShares: shares.toString(),
+          reducedShares: sharesToWithdraw.toString(),
+          previewAmount: previewAmount.toString(),
+        });
+      } catch (reducedPreviewError) {
+        elizaLogger.error(
+          'Failed to preview redemption amount, even with reduced shares',
+          {
+            error: reducedPreviewError,
+            originalShares: shares.toString(),
+            reducedShares: sharesToWithdraw.toString(),
+          },
+        );
+        throw new Error(
+          'Failed to preview redemption amount, even with reduced shares',
+        );
+      }
     }
 
-    elizaLogger.info('Successfully withdrew shares from vault', {
-      withdrawSharesHash,
-    });
+    const MAX_RETRIES = 3;
+    let currentAttempt = 1;
+    let lastError: Error | null = null;
 
-    // 3. Withdraw from silo
-    const { transactionHash, success, error } = await withdrawFromSilo({
-      publicClient,
-      walletClient,
-      siloAddress: siloAddress as `0x${string}`,
-      vaultAddress: userVaultAddress as `0x${string}`,
-    });
+    while (currentAttempt <= MAX_RETRIES) {
+      try {
+        // 1. Withdraw shares from vault to agent - use siloAddress as the share token
+        const { request: withdrawSharesRequest } =
+          await publicClient.simulateContract({
+            account: agentAddress,
+            address: userVaultAddress as `0x${string}`,
+            abi: VAULT_ABI,
+            functionName: 'withdraw',
+            args: [siloAddress, sharesToWithdraw], // Use siloAddress as the share token
+          });
 
-    if (!success || error) {
-      throw new Error(error || 'Failed to withdraw from silo');
+        elizaLogger.info('Withdrawing shares from vault', {
+          siloAddress,
+          shares: sharesToWithdraw.toString(),
+          vault: userVaultAddress,
+        });
+
+        const withdrawSharesHash = await walletClient.writeContract({
+          ...withdrawSharesRequest,
+          account: walletClient.account,
+        });
+
+        const withdrawSharesReceipt =
+          await publicClient.waitForTransactionReceipt({
+            hash: withdrawSharesHash,
+          });
+
+        if (withdrawSharesReceipt.status !== 'success') {
+          throw new Error('Failed to withdraw shares from vault');
+        }
+
+        elizaLogger.info('Successfully withdrew shares from vault', {
+          withdrawSharesHash,
+          siloAddress,
+          shares: sharesToWithdraw.toString(),
+          attempt: currentAttempt,
+        });
+
+        // 3. Withdraw from silo
+        const { transactionHash, success, error } = await withdrawFromSilo({
+          publicClient,
+          walletClient,
+          siloAddress: siloAddress as `0x${string}`,
+          vaultAddress: userVaultAddress as `0x${string}`,
+        });
+
+        if (!success || error) {
+          throw new Error(error || 'Failed to withdraw from silo');
+        }
+
+        elizaLogger.info('Successfully completed withdrawal operation', {
+          userId,
+          shares: sharesToWithdraw.toString(),
+          tokenAmount: shares.toString(),
+          expectedAmount: expectedAmount.toString(),
+          transactionHash,
+          withdrawSharesHash,
+          transferTx: transactionHash,
+          attempt: currentAttempt,
+        });
+
+        return {
+          success: true,
+          transactionHash,
+          withdrawnAmount: previewAmount.toString(),
+          transferTx: transactionHash,
+        };
+      } catch (txError) {
+        lastError =
+          txError instanceof Error ? txError : new Error(String(txError));
+        elizaLogger.error('Transaction failed in withdrawal attempt', {
+          error: lastError.message,
+          attempt: currentAttempt,
+          maxRetries: MAX_RETRIES,
+        });
+
+        if (currentAttempt < MAX_RETRIES) {
+          currentAttempt++;
+          // Wait before retrying
+          await new Promise((resolve) => setTimeout(resolve, 2000));
+          continue;
+        }
+        throw lastError;
+      }
     }
 
-    elizaLogger.info('Successfully completed withdrawal operation', {
-      userId,
-      shares: shares.toString(),
-      tokenAmount: amount.toString(),
-      transactionHash,
-      withdrawSharesHash,
-      transferTx: transactionHash,
-    });
-
-    return {
-      success: true,
-      transactionHash,
-      withdrawnAmount: amount.toString(),
-      transferTx: transactionHash,
-    };
+    throw lastError || new Error('Withdrawal failed after all retry attempts');
   } catch (txError) {
     elizaLogger.error('Transaction failed in withdrawal', {
       error: txError instanceof Error ? txError.message : String(txError),
@@ -270,7 +376,10 @@ export const withdrawAllAction: Action = {
       });
 
       elizaLogger.info('Finding vaults with positions', {
-        context: findVaultsContext,
+        context: {
+          walletInfo: (currentState.metadata as StateMetadata)?.walletInfo,
+          siloVaults: currentState.siloVaults,
+        },
       });
 
       const content = await generateObject({
@@ -332,12 +441,60 @@ export const withdrawAllAction: Action = {
         return false;
       }
 
-      elizaLogger.info('Found vaults with positions', {
-        vaults: vaults.map((vault) => vault.siloAddress),
+      // Filter vaults by checking actual share token balances
+      const vaultsWithPositions = [];
+      for (const vault of vaults) {
+        try {
+          const { shares } = await getPositionInfo({
+            publicClient: provider.getPublicClient(),
+            walletClient: provider.getWalletClient(),
+            siloAddress: vault.siloAddress,
+            vaultAddress: vaultAddress as `0x${string}`,
+          });
+
+          if (shares > 0n) {
+            vaultsWithPositions.push({
+              ...vault,
+              shares: shares.toString(),
+            });
+            elizaLogger.info('Found share position in vault', {
+              siloAddress: vault.siloAddress,
+              shares: shares.toString(),
+            });
+          } else {
+            elizaLogger.debug('No share position in vault', {
+              siloAddress: vault.siloAddress,
+              shares: shares.toString(),
+            });
+          }
+        } catch (error) {
+          elizaLogger.warn('Error checking share position in vault', {
+            siloAddress: vault.siloAddress,
+            error: error instanceof Error ? error.message : String(error),
+            stack: error instanceof Error ? error.stack : undefined,
+          });
+        }
+      }
+
+      if (vaultsWithPositions.length === 0) {
+        elizaLogger.warn('No vaults with share positions found');
+        if (callback) {
+          callback({
+            text: 'No vaults with share positions found. This could mean either there are no positions or there was an error checking the positions.',
+          });
+        }
+        return false;
+      }
+
+      elizaLogger.info('Found vaults with share positions', {
+        vaults: vaultsWithPositions.map((vault) => ({
+          siloAddress: vault.siloAddress,
+          shares: vault.shares,
+        })),
       });
 
-      // Withdraw from each vault
-      for (const vault of vaults) {
+      // Withdraw from each vault with confirmed positions
+      for (const vault of vaultsWithPositions) {
         const withdrawalContent = {
           siloAddress: vault.siloAddress,
           userVaultAddress: vaultAddress,

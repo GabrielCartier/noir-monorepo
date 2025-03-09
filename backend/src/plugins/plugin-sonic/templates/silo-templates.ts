@@ -122,32 +122,28 @@ Validate the deposit of {{amount}} {{tokenSymbol}} using:
 `;
 
 // Template for finding vaults with active positions
-export const findVaultsWithPositionsTemplate = `Given the last message from the user and only that message, find all vaults where the user has an active position.
-
-{{recentMessages}}
-{{siloVaults}}
-{{userVaultAddress}}
+export const findVaultsWithPositionsTemplate = `
+You are helping to find silo vaults where the user has share token positions.
+The available silo vaults are in {{siloVaults}}.
 
 For each vault in siloVaults:
-1. Look for the "Silo Token Address" field in each vault entry
+1. Look for the "Silo Token Address" field - this is the share token address
 2. Include that address in the response if it exists
 
-Additionally, include these specific silo addresses if they exist:
-- 0xB2fCA0e72DF1B7f844E439668dc3A58646C7D65a
-
-If no vaults are found, return:
-\`\`\`json
+Return a JSON object with an array of silo addresses where the user has share token positions.
+The response should be in this format:
 {
-    "error": "No vaults with active positions found"
+  "vaults": [
+    {
+      "siloAddress": "0x..."  // Use the "Silo Token Address" field from each vault
+    }
+  ]
 }
-\`\`\`
 
-Otherwise return:
-\`\`\`json
+If no positions are found, return:
 {
-    "vaults": [{
-        "siloAddress": string  // Use the "Silo Token Address" field from each vault or the additional addresses
-    }]
+  "error": "No positions found in any silo vaults"
 }
-\`\`\`
+
+Note: The actual balance check will be done by the code after getting this list of potential vaults.
 `;
