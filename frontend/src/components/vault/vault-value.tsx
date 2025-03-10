@@ -15,8 +15,14 @@ import { WithdrawDialog } from './withdraw-dialog';
 export function VaultValue() {
   const { address } = useAccount();
   const { data: vaultStatus } = useCheckVaultStatus();
-  const { tokens, totalValueUsd, totalValueUsdFormatted, isLoading, refetch } =
-    useUserVault();
+  const {
+    tokens,
+    totalValueUsdFormatted,
+    totalValueNativeFormatted,
+    totalValueNative,
+    isLoading,
+    refetch,
+  } = useUserVault();
   const [isAgentActive, setIsAgentActive] = useState(true);
 
   if (isLoading) {
@@ -99,13 +105,7 @@ export function VaultValue() {
                 />
                 <div>
                   <div className="text-sm">
-                    {/* {formatBalance(portfolioValue.totalValueInS.toString())} S
-                    ($
-                    {formatBalance(
-                      portfolioValue.totalValueInUsd.toString(),
-                      true,
-                    )}
-                    ) */}
+                    {totalValueNative} S ({totalValueNativeFormatted})
                   </div>
                   <div className="text-sm text-muted-foreground">Sonic</div>
                 </div>

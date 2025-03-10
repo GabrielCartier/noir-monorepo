@@ -1,5 +1,7 @@
 import { SUPPORTED_TOKENS } from '@/src/lib/constants/supported-tokens';
-import type { Address } from 'viem';
+import { type Address, formatEther } from 'viem';
+import { NATIVE_TOKEN_KEY } from '../lib/constants/native-token-key';
+import { useCheckBalance } from './use-check-balance';
 import { useCheckVaultStatus } from './use-check-vault-status';
 import { useTokenPrices } from './use-token-prices';
 import { useVaultBalance } from './use-vault-balance';
@@ -18,13 +20,15 @@ export interface VaultValue {
   tokens: Record<Address, TokenValue>;
   totalValueUsd: number;
   totalValueUsdFormatted: string;
+  totalValueNative: number;
+  totalValueNativeFormatted: string;
   isLoading: boolean;
   isError: boolean;
   refetch: () => void;
 }
 
 export function useUserVault(): VaultValue {
-  const { data, refetch: refetchVaultStatus } = useCheckVaultStatus();
+  const { data } = useCheckVaultStatus();
   const vaultAddress = data?.vaultAddress;
   const {
     data: balances,
@@ -38,9 +42,8 @@ export function useUserVault(): VaultValue {
     isError: isErrorPrices,
     refetch: refetchPrices,
   } = useTokenPrices();
-
+  const nativeBalance = useCheckBalance(vaultAddress);
   const refetch = () => {
-    refetchVaultStatus();
     refetchBalances();
     refetchPrices();
   };
@@ -53,6 +56,8 @@ export function useUserVault(): VaultValue {
       tokens: {},
       totalValueUsd: 0,
       totalValueUsdFormatted: '$0.00',
+      totalValueNative: 0,
+      totalValueNativeFormatted: '$0.00',
       isLoading,
       isError,
       refetch,
@@ -94,11 +99,36 @@ export function useUserVault(): VaultValue {
       totalValueUsd += valueUsd;
     }
   }
+  let nativeUsd = 0;
+  let native = 0;
+  if (nativeBalance && prices?.['0x039e2fB66102314Ce7b64Ce5Ce3E5183bc94aD38']) {
+    nativeUsd =
+      (Number(prices['0x039e2fB66102314Ce7b64Ce5Ce3E5183bc94aD38']?.priceUsd) ||
+        0) * Number(formatEther(nativeBalance.value));
+    tokens[NATIVE_TOKEN_KEY] = {
+      balance: nativeBalance.value,
+      balanceFormatted: formatEther(nativeBalance.value),
+      valueUsd: nativeUsd,
+      valueUsdFormatted: formatUsd(nativeUsd),
+      symbol: 'S',
+      decimals: nativeBalance.decimals,
+      name: 'Sonic',
+    };
+    totalValueUsd += nativeUsd;
+    native = Number(formatEther(nativeBalance.value));
+    // We consider wrapped token like native token
+    nativeUsd += tokens['0x039e2fB66102314Ce7b64Ce5Ce3E5183bc94aD38'].valueUsd;
+    native += Number(
+      tokens['0x039e2fB66102314Ce7b64Ce5Ce3E5183bc94aD38'].balanceFormatted,
+    );
+  }
 
   return {
     tokens,
     totalValueUsd,
     totalValueUsdFormatted: formatUsd(totalValueUsd),
+    totalValueNative: native,
+    totalValueNativeFormatted: formatUsd(nativeUsd),
     isLoading,
     isError,
     refetch,

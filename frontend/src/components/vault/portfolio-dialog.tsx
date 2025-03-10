@@ -32,6 +32,7 @@ export function PortfolioDialog({
   triggerProps,
 }: PortfolioDialogProps) {
   const [isOpen, setIsOpen] = useState(false);
+  console.log('tokenBalances', tokenBalances);
 
   // Get native S balance first
   // const nativeS = tokenBalances[NATIVE_TOKEN_KEY];

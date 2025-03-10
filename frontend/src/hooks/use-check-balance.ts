@@ -1,7 +1,7 @@
-import { useAccount, useBalance } from 'wagmi';
+import type { Address } from 'viem';
+import { useBalance } from 'wagmi';
 
-export function useCheckBalance() {
-  const { address } = useAccount();
+export function useCheckBalance(address: Address | undefined) {
   const { data: balance } = useBalance({
     address,
   });

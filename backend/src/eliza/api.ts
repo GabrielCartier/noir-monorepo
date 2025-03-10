@@ -195,7 +195,7 @@ export class ApiClient {
           >,
         );
 
-        return Response.json({ prices });
+        return Response.json(prices);
       } catch (error) {
         elizaLogger.error('[ApiClient] Error fetching token prices:', error);
         return Response.json(

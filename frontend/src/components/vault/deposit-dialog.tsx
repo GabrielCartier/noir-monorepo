@@ -25,7 +25,7 @@ import {
   TabsList,
   TabsTrigger,
 } from '@/src/components/ui/tabs';
-import { useCheckBalance } from '@/src/hooks/use-check-balance';
+import { useUserBalance } from '@/src/hooks/use-user-balance';
 import { useVaultBalance } from '@/src/hooks/use-vault-balance';
 import { SUPPORTED_TOKENS } from '@/src/lib/constants/supported-tokens';
 import { useState } from 'react';
@@ -52,7 +52,7 @@ export function DepositDialog({
   const [isLoading, setIsLoading] = useState(false);
   const [amount, setAmount] = useState('');
   const [selectedToken, setSelectedToken] = useState<Token>(SONIC);
-  const nativeBalance = useCheckBalance();
+  const nativeBalance = useUserBalance();
   const { data: tokenBalances } = useVaultBalance(address);
 
   const handleDirectDeposit = async () => {
