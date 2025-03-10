@@ -4,6 +4,7 @@ import {
   type ICacheManager,
   type IDatabaseAdapter,
   type IDatabaseCacheAdapter,
+  type Plugin,
   elizaLogger,
   settings,
   stringToUuid,

@@ -6,17 +6,12 @@
     "dev": "bun run --cwd frontend dev",
     "build": "bun run --cwd frontend build",
     "backend:dev": "bun run --cwd backend dev",
+    "backend:build": "bun run --cwd backend build",
+    "backend:start": "bun run --cwd backend start",
     "lint": "biome check .",
     "format": "biome format . --write"
   },
   "devDependencies": {
     "@biomejs/biome": "latest"
-  },
-  "engines": {
-    "node": ">=22"
-  },
-  "dependencies": {
-    "ethers": "5.7.2",
-    "exponential-backoff": "^3.1.2"
   }
 }
