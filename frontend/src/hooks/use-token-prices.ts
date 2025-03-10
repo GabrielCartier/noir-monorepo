@@ -1,7 +1,6 @@
 import { clientEnv } from '@/src/lib/config/client-env';
 import { useQuery } from '@tanstack/react-query';
 import type { Address } from 'viem';
-import { useChainId } from 'wagmi';
 import { SUPPORTED_TOKENS } from '../lib/constants/supported-tokens';
 
 export interface TokenPrice {
@@ -15,7 +14,6 @@ export interface TokenPrice {
  * @returns Object containing token prices indexed by token address
  */
 export function useTokenPrices() {
-  const chainId = useChainId();
   const tokenAddresses = SUPPORTED_TOKENS.map((token) => token.address);
   return useQuery<Record<Address, TokenPrice | undefined>>({
     queryKey: ['tokenPrices'],
@@ -27,7 +25,8 @@ export function useTokenPrices() {
           headers: {
             'Content-Type': 'application/json',
           },
-          body: JSON.stringify({ tokenAddresses, chainId }),
+          // TODO We should get the chain name
+          body: JSON.stringify({ tokenAddresses, chainId: 'sonic' }),
         },
       );
 
