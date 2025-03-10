@@ -1,6 +1,4 @@
 'use client';
-
-import { useWallet } from '@/src/components/providers/wallet-provider';
 import { Button } from '@/src/components/ui/button';
 import {
   Dialog,
@@ -14,6 +12,7 @@ import {
 import { getWalletUUID } from '@/src/utils/uuid';
 import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
+import { useAccount } from 'wagmi';
 import {
   checkVaultStatus,
   createVault,
@@ -26,7 +25,7 @@ interface CreateVaultDialogProps {
 }
 
 export function CreateVaultDialog({ onVaultCreated }: CreateVaultDialogProps) {
-  const { address } = useWallet();
+  const { address } = useAccount();
   const [isOpen, setIsOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [vaultInfo, setVaultInfo] = useState<VaultInfo | null>(null);

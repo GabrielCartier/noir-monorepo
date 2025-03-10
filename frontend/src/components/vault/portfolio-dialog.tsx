@@ -15,61 +15,26 @@ import {
   TableHeader,
   TableRow,
 } from '@/src/components/ui/table';
+import type { TokenValue } from '@/src/hooks/use-user-vault';
 import { useState } from 'react';
-import { formatUnits } from 'viem';
-import { SUPPORTED_TOKENS } from '../../lib/constants/supported-tokens';
-
-const NATIVE_TOKEN_KEY = 'native_s' as const;
-
-interface TokenBalances {
-  [address: string]: {
-    balance: bigint;
-    valueInS: bigint;
-    valueInUsd: number;
-    symbol: string;
-  };
-}
+import type { Address } from 'viem';
 
 interface PortfolioDialogProps {
-  tokenBalances: TokenBalances;
+  tokenBalances: Record<Address, TokenValue>;
   totalValueInS: bigint;
-  totalValueInUsd: number;
+  totalValueInUsd: string;
   triggerProps?: React.ButtonHTMLAttributes<HTMLButtonElement>;
 }
 
 export function PortfolioDialog({
   tokenBalances,
-  totalValueInS,
   totalValueInUsd,
   triggerProps,
 }: PortfolioDialogProps) {
   const [isOpen, setIsOpen] = useState(false);
 
-  const formatBalance = (balance: bigint, decimals: number) => {
-    const formatted = formatUnits(balance, decimals);
-    return Number(formatted).toLocaleString('en-US', {
-      minimumFractionDigits: 3,
-      maximumFractionDigits: 3,
-    });
-  };
-
-  const formatUsd = (value: number) => {
-    return value.toLocaleString('en-US', {
-      style: 'currency',
-      currency: 'USD',
-      minimumFractionDigits: 2,
-      maximumFractionDigits: 2,
-    });
-  };
-
   // Get native S balance first
-  const nativeS = tokenBalances[NATIVE_TOKEN_KEY];
-
-  // Get all other token balances
-  const otherTokens = SUPPORTED_TOKENS.map((token) => ({
-    token,
-    balance: tokenBalances[token.address],
-  })).filter(({ balance }) => balance && balance.balance > 0n);
+  // const nativeS = tokenBalances[NATIVE_TOKEN_KEY];
 
   return (
     <Dialog open={isOpen} onOpenChange={setIsOpen}>
@@ -92,11 +57,11 @@ export function PortfolioDialog({
                 Total Value:{' '}
               </span>
               <span className="text-lg font-bold">
-                {formatBalance(totalValueInS, 18)} S
+                {/* {formatBalance(totalValueInS, 18)} S */}
               </span>
             </div>
             <div className="text-right text-sm text-muted-foreground">
-              ≈ {formatUsd(totalValueInUsd)}
+              ≈ {totalValueInUsd}
             </div>
           </div>
           <Table>
@@ -110,7 +75,7 @@ export function PortfolioDialog({
             </TableHeader>
             <TableBody>
               {/* Display native S first */}
-              {nativeS && (
+              {/* {nativeS && (
                 <TableRow>
                   <TableCell className="font-medium">
                     {nativeS.symbol}
@@ -123,22 +88,20 @@ export function PortfolioDialog({
                     {formatUsd(nativeS.valueInUsd)}
                   </TableCell>
                 </TableRow>
-              )}
+              )} */}
 
               {/* Display other tokens */}
-              {otherTokens.map(({ token, balance }) => (
-                <TableRow key={token.address}>
+              {Object.values(tokenBalances).map((tokenValue) => (
+                <TableRow key={tokenValue.symbol}>
                   <TableCell className="font-medium">
-                    {token.name} ({token.symbol})
+                    {tokenValue.name} ({tokenValue.symbol})
                   </TableCell>
-                  <TableCell>
-                    {formatBalance(balance.balance, token.decimals)}
-                  </TableCell>
-                  <TableCell className="text-right">
+                  <TableCell>{tokenValue.balanceFormatted}</TableCell>
+                  {/* <TableCell className="text-right">
                     {formatBalance(balance.valueInS, 18)} S
-                  </TableCell>
+                  </TableCell> */}
                   <TableCell className="text-right">
-                    {formatUsd(balance.valueInUsd)}
+                    {tokenValue.valueUsdFormatted}
                   </TableCell>
                 </TableRow>
               ))}

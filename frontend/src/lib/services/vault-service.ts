@@ -1,7 +1,12 @@
-import type { PublicClient, WalletClient } from 'viem';
+import {
+  simulateContract,
+  waitForTransactionReceipt,
+  writeContract,
+} from 'wagmi/actions';
 import type { Token } from '../../types/token';
 import type { VaultInfo, VaultStatus } from '../../types/vault';
 import { clientEnv } from '../config/client-env';
+import { wagmiConfig } from '../config/wagmi-config';
 import { wrappedSonicAbi } from '../constants/abis/wrapped-sonic-abi';
 import { SUPPORTED_TOKENS } from '../constants/supported-tokens';
 
@@ -80,17 +85,13 @@ export async function createVault(
 export async function depositForVault({
   address,
   vaultAddress,
-  publicClient,
-  walletClient,
   amount,
 }: {
   address: string;
   vaultAddress: string;
-  publicClient: PublicClient;
-  walletClient: WalletClient;
   amount: bigint;
 }) {
-  const { request } = await publicClient.simulateContract({
+  const { request } = await simulateContract(wagmiConfig, {
     address: WRAPPED_SONIC_ADDRESS as `0x${string}`,
     abi: wrappedSonicAbi,
     functionName: 'depositFor',
@@ -99,12 +100,12 @@ export async function depositForVault({
     account: address as `0x${string}`,
   });
 
-  const hash = await walletClient.writeContract({
+  const hash = await writeContract(wagmiConfig, {
     ...request,
     account: address as `0x${string}`,
   });
 
-  await publicClient.waitForTransactionReceipt({ hash });
+  await waitForTransactionReceipt(wagmiConfig, { hash });
   return hash;
 }
 

@@ -1,9 +1,9 @@
 'use client';
 
-import { useWallet } from '@/src/components/providers/wallet-provider';
+import { useAccount } from 'wagmi';
 
 export default function Profile() {
-  const { address } = useWallet();
+  const { address } = useAccount();
 
   if (!address) {
     return null; // Will redirect from layout

@@ -25,18 +25,17 @@ import {
   TabsList,
   TabsTrigger,
 } from '@/src/components/ui/tabs';
-import { useEffect, useState } from 'react';
+import { useCheckBalance } from '@/src/hooks/use-check-balance';
+import { useVaultBalance } from '@/src/hooks/use-vault-balance';
+import { SUPPORTED_TOKENS } from '@/src/lib/constants/supported-tokens';
+import { useState } from 'react';
 import { toast } from 'sonner';
-import { formatEther, parseEther } from 'viem';
-import {
-  getTokenBalances,
-  transferToken,
-} from '../../lib/services/transfer-service';
+import { parseEther } from 'viem';
+import { transferToken } from '../../lib/services/transfer-service';
 import { depositForVault } from '../../lib/services/vault-service';
 import { SONIC } from '../../lib/services/vault-service';
 import type { Token } from '../../types/token';
 import type { DepositDialogProps as BaseDepositDialogProps } from '../../types/vault';
-import { useWallet } from '../providers/wallet-provider';
 
 interface DepositDialogProps
   extends Omit<BaseDepositDialogProps, 'publicClient' | 'walletClient'> {
@@ -53,63 +52,25 @@ export function DepositDialog({
   const [isLoading, setIsLoading] = useState(false);
   const [amount, setAmount] = useState('');
   const [selectedToken, setSelectedToken] = useState<Token>(SONIC);
-  const [tokenBalances, setTokenBalances] = useState<
-    { token: Token; balance: bigint }[]
-  >([]);
-  const [nativeBalance, setNativeBalance] = useState<bigint>(0n);
-  const { publicClient, ensureCorrectChain, walletClient } = useWallet();
-
-  useEffect(() => {
-    if (isOpen) {
-      checkBalances();
-      checkNativeBalance();
-    }
-  }, [isOpen]);
-
-  const checkNativeBalance = async () => {
-    if (!address || !publicClient) {
-      return;
-    }
-
-    try {
-      const balance = await publicClient.getBalance({ address });
-      setNativeBalance(balance);
-    } catch (error) {
-      console.error('Error checking native balance:', error);
-      toast.error('Failed to check S balance');
-    }
-  };
-
-  const checkBalances = async () => {
-    try {
-      const balances = await getTokenBalances(address, publicClient);
-      setTokenBalances(balances);
-    } catch (error) {
-      console.error('Error checking balances:', error);
-      toast.error('Failed to check balances');
-    }
-  };
+  const nativeBalance = useCheckBalance();
+  const { data: tokenBalances } = useVaultBalance(address);
 
   const handleDirectDeposit = async () => {
     if (!amount || Number.isNaN(Number(amount)) || Number(amount) <= 0) {
       toast.error('Please enter a valid amount');
       return;
     }
-
-    if (!walletClient) {
-      toast.error('Wallet client not initialized');
+    if (!nativeBalance) {
       return;
     }
-
     setIsLoading(true);
     try {
-      await ensureCorrectChain();
       const amountInWei = parseEther(amount);
 
       // Check if user has sufficient native balance
-      if (nativeBalance < amountInWei) {
+      if (nativeBalance.value < amountInWei) {
         toast.error(
-          `Insufficient S balance. You have ${formatEther(nativeBalance)} S, but need ${amount} S`,
+          `Insufficient S balance. You have ${nativeBalance.formatted} S, but need ${amount} S`,
         );
         return;
       }
@@ -117,15 +78,12 @@ export function DepositDialog({
       await depositForVault({
         address,
         vaultAddress,
-        publicClient,
-        walletClient,
         amount: amountInWei,
       });
 
       toast.success('Successfully deposited S tokens to vault');
       setIsOpen(false);
       onDepositSuccess();
-      checkNativeBalance();
     } catch (error) {
       console.error('Error depositing:', error);
       if (error instanceof Error) {
@@ -152,20 +110,12 @@ export function DepositDialog({
       return;
     }
 
-    if (!walletClient) {
-      toast.error('Wallet client not initialized');
-      return;
-    }
-
     setIsLoading(true);
     try {
-      await ensureCorrectChain();
       const amountInWei = BigInt(Math.floor(Number(amount) * 1e18));
 
       // Check if user has sufficient balance
-      const tokenBalance = tokenBalances.find(
-        (b) => b.token.symbol === selectedToken.symbol,
-      )?.balance;
+      const tokenBalance = tokenBalances[selectedToken.address];
       if (tokenBalance && tokenBalance < amountInWei) {
         toast.error(
           `Insufficient ${selectedToken.symbol} balance. You have ${Number(tokenBalance) / 1e18} ${selectedToken.symbol}, but need ${amount} ${selectedToken.symbol}`,
@@ -178,8 +128,6 @@ export function DepositDialog({
         amount: amountInWei,
         from: address,
         to: vaultAddress,
-        publicClient,
-        walletClient,
       });
 
       toast.success(
@@ -187,7 +135,6 @@ export function DepositDialog({
       );
       setIsOpen(false);
       onDepositSuccess();
-      checkBalances();
     } catch (error) {
       console.error('Error transferring:', error);
       if (error instanceof Error) {
@@ -242,7 +189,7 @@ export function DepositDialog({
                 />
               </div>
               <div className="text-sm text-muted-foreground">
-                <p>Available S balance: {formatEther(nativeBalance)} S</p>
+                <p>Available S balance: {nativeBalance?.formatted} S</p>
               </div>
               <DialogFooter>
                 <Button onClick={handleDirectDeposit} disabled={isLoading}>
@@ -258,10 +205,10 @@ export function DepositDialog({
                 <Select
                   value={selectedToken.symbol}
                   onValueChange={(value) => {
-                    const token = tokenBalances.find(
-                      (b) => b.token.symbol === value,
-                    )?.token;
-                    if (token) {
+                    const token = SUPPORTED_TOKENS.find(
+                      (token) => token.symbol === value,
+                    );
+                    if (token && tokenBalances[token.address] > 0n) {
                       setSelectedToken(token);
                     }
                   }}
@@ -270,9 +217,14 @@ export function DepositDialog({
                     <SelectValue placeholder="Select token" />
                   </SelectTrigger>
                   <SelectContent className="max-h-[200px] overflow-y-auto">
-                    {tokenBalances.map(({ token, balance }) => (
-                      <SelectItem key={token.symbol} value={token.symbol}>
-                        {token.symbol} ({Number(balance) / 1e18} available)
+                    {Object.entries(tokenBalances).map(([address, balance]) => (
+                      <SelectItem key={address} value={address}>
+                        {
+                          SUPPORTED_TOKENS.find(
+                            (token) => token.address === address,
+                          )?.symbol
+                        }{' '}
+                        ({Number(balance) / 1e18} available)
                       </SelectItem>
                     ))}
                   </SelectContent>

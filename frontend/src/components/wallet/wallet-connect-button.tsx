@@ -1,6 +1,4 @@
 'use client';
-
-import { useWallet } from '@/src/components/providers/wallet-provider';
 import { Button } from '@/src/components/ui/button';
 import {
   DropdownMenu,
@@ -9,7 +7,9 @@ import {
   DropdownMenuTrigger,
 } from '@/src/components/ui/dropdown-menu';
 import { cn } from '@/src/lib/utils';
+import { ConnectKitButton } from 'connectkit';
 import { LogOut } from 'lucide-react';
+import { useAccount, useDisconnect } from 'wagmi';
 
 interface WalletConnectButtonProps {
   className?: string;
@@ -20,30 +20,28 @@ export function WalletConnectButton({
   className,
   variant = 'default',
 }: WalletConnectButtonProps) {
-  const { address, connect, disconnect, isConnecting } = useWallet();
-
-  const buttonContent = address ? (
-    <Button
-      variant="outline"
-      className={cn(
-        variant === 'large' && 'px-8 py-6 text-lg hover:bg-green-500/10',
-        className,
+  const { disconnect } = useDisconnect();
+  const { address } = useAccount();
+  const buttonContent = (
+    <ConnectKitButton.Custom>
+      {({ isConnecting, show, address }) => (
+        <Button
+          variant="outline"
+          onClick={show}
+          disabled={isConnecting}
+          className={cn(
+            variant === 'large' && 'px-8 py-6 text-lg hover:bg-green-500/10',
+            className,
+          )}
+        >
+          {isConnecting
+            ? 'Connecting...'
+            : address
+              ? `${address.slice(0, 6)}...${address.slice(-4)}`
+              : 'Connect Wallet'}
+        </Button>
       )}
-    >
-      {address.slice(0, 6)}...{address.slice(-4)}
-    </Button>
-  ) : (
-    <Button
-      variant="outline"
-      onClick={connect}
-      disabled={isConnecting}
-      className={cn(
-        variant === 'large' && 'px-8 py-6 text-lg hover:bg-green-500/10',
-        className,
-      )}
-    >
-      {isConnecting ? 'Connecting...' : 'Connect Wallet'}
-    </Button>
+    </ConnectKitButton.Custom>
   );
 
   const wrappedButton = (
@@ -67,7 +65,7 @@ export function WalletConnectButton({
     <DropdownMenu>
       <DropdownMenuTrigger asChild={true}>{wrappedButton}</DropdownMenuTrigger>
       <DropdownMenuContent align="end">
-        <DropdownMenuItem onClick={disconnect}>
+        <DropdownMenuItem onClick={() => disconnect()}>
           <LogOut className="mr-2 h-4 w-4" />
           Disconnect
         </DropdownMenuItem>

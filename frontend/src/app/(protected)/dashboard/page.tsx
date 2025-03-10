@@ -1,11 +1,11 @@
 'use client';
 
 import { PortfolioChart } from '@/src/components/dashboard/portfolio-chart';
-import { useWallet } from '@/src/components/providers/wallet-provider';
 import { VaultValue } from '@/src/components/vault/vault-value';
+import { useAccount } from 'wagmi';
 
 export default function Dashboard() {
-  const { address } = useWallet();
+  const { address } = useAccount();
 
   if (!address) {
     return null; // Will redirect from layout

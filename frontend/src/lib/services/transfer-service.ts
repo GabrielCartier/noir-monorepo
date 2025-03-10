@@ -1,17 +1,24 @@
-import type { PublicClient, WalletClient } from 'viem';
+import type { Address } from 'viem';
 import { erc20Abi } from 'viem';
+import {
+  readContract,
+  simulateContract,
+  waitForTransactionReceipt,
+  writeContract,
+} from 'wagmi/actions';
 import type { Token } from '../../types/token';
+import { wagmiConfig } from '../config/wagmi-config';
 import { SUPPORTED_TOKENS } from '../constants/supported-tokens';
 import { checkVaultStatus } from './vault-service';
 
+// TODO Should use the hook instead.
 export async function getTokenBalances(
-  address: string,
-  publicClient: PublicClient,
+  address: Address,
 ): Promise<{ token: Token; balance: bigint }[]> {
   const balances = await Promise.all(
     SUPPORTED_TOKENS.map(async (token) => {
       try {
-        const balance = await publicClient.readContract({
+        const balance = await readContract(wagmiConfig, {
           address: token.address as `0x${string}`,
           abi: erc20Abi,
           functionName: 'balanceOf',
@@ -33,15 +40,11 @@ export async function transferToken({
   amount,
   from,
   to,
-  publicClient,
-  walletClient,
 }: {
   token: Token;
   amount: bigint;
-  from: string;
-  to: string;
-  publicClient: PublicClient;
-  walletClient: WalletClient;
+  from: Address;
+  to: Address;
 }): Promise<{
   hash: string;
   updatedVaultStatus: {
@@ -50,18 +53,21 @@ export async function transferToken({
     balance?: bigint;
   };
 }> {
-  const { request } = await publicClient.simulateContract({
-    address: token.address as `0x${string}`,
+  const { request } = await simulateContract(wagmiConfig, {
+    address: token.address,
     abi: erc20Abi,
     functionName: 'transfer',
-    args: [to as `0x${string}`, amount],
-    account: from as `0x${string}`,
+    args: [to, amount],
+    account: from,
   });
 
-  const hash = await walletClient.writeContract(request);
+  const hash = await writeContract(wagmiConfig, {
+    ...request,
+    account: from,
+  });
 
   // Wait for transaction to be mined
-  await publicClient.waitForTransactionReceipt({ hash });
+  await waitForTransactionReceipt(wagmiConfig, { hash });
 
   // Update vault balance
   const vaultStatus = await checkVaultStatus(from);

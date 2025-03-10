@@ -1,15 +1,14 @@
 'use client';
-
-import { useWallet } from '@/src/components/providers/wallet-provider';
 import { usePathname, useRouter } from 'next/navigation';
 import { useEffect } from 'react';
+import { useAccount } from 'wagmi';
 
 export default function ProtectedLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
-  const { address } = useWallet();
+  const { address } = useAccount();
   const router = useRouter();
   const pathname = usePathname();
 

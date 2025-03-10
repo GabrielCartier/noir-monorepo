@@ -1,8 +1,8 @@
-import { useWallet } from '@/src/components/providers/wallet-provider';
 import { WalletConnectButton } from '@/src/components/wallet/wallet-connect-button';
+import { useAccount } from 'wagmi';
 
 export function LandingPage() {
-  const { isConnecting } = useWallet();
+  const { isConnecting } = useAccount();
 
   return (
     <div className="flex flex-col items-center justify-center min-h-[80vh] text-center px-4">

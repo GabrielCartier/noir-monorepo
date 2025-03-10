@@ -315,16 +315,16 @@ const formatSonicContext = async (
     .join('\n');
 
   return `
-{{walletInfo}}
+  User wallet info:
 ${walletInfo}
 
-{{supportedTokens}}
+Supported tokens:
 ${supportedTokensList}
 
-{{siloVaults}}
+Silo vaults:
 ${siloVaultsList}
 
-{{userVaultAddress}}
+User vault address:
 ${userVault}
 `;
 };

@@ -16,7 +16,6 @@ import { useState } from 'react';
 import { toast } from 'sonner';
 import { withdrawFromVault } from '../../lib/services/vault-service';
 import type { WithdrawDialogProps } from '../../types/vault';
-import { useWallet } from '../providers/wallet-provider';
 
 export function WithdrawDialog({
   address,
@@ -27,7 +26,6 @@ export function WithdrawDialog({
   const [isOpen, setIsOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [amount, setAmount] = useState('');
-  const { ensureCorrectChain } = useWallet();
 
   const handleWithdraw = async () => {
     if (!amount || Number.isNaN(Number(amount)) || Number(amount) <= 0) {
@@ -37,9 +35,6 @@ export function WithdrawDialog({
 
     setIsLoading(true);
     try {
-      // Ensure we're on the correct chain
-      await ensureCorrectChain();
-
       // Convert amount to wei (18 decimals)
       const amountInWei = BigInt(Math.floor(Number(amount) * 1e18));
 

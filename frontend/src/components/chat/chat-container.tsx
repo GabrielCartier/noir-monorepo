@@ -1,6 +1,5 @@
 'use client';
-import { useWallet } from '@/src/components/providers/wallet-provider';
-import { useEffect, useRef, useState } from 'react';
+import { useRef, useState } from 'react';
 import { ChatBox } from 'src/components/chat/chat-box';
 import { ChatInfo } from 'src/components/chat/chat-info';
 import { ChatMessage } from 'src/components/chat/chat-message';
@@ -13,19 +12,14 @@ import { processApiResponse } from 'src/lib/message-processor';
 import { cn } from 'src/lib/utils';
 import { messagesService } from 'src/services/messages';
 import type { Message } from 'src/types/messages';
+import { useAccount } from 'wagmi';
 
 export const ChatContainer = () => {
   const [isExpanded, setIsExpanded] = useState(false);
   const [messages, setMessages] = useState<Message[]>([]);
   const [isLoading, setIsLoading] = useState(false);
-  const [mounted, setMounted] = useState(false);
-  const { address } = useWallet();
+  const { address } = useAccount();
   const hasInitialized = useRef(false);
-
-  // Handle mounting state
-  useEffect(() => {
-    setMounted(true);
-  }, []);
 
   const handleSendMessage = async (text: string) => {
     // Add user message
@@ -56,11 +50,6 @@ export const ChatContainer = () => {
       setIsLoading(false);
     }
   };
-
-  // Don't render anything until mounted to prevent hydration issues
-  if (!mounted) {
-    return null;
-  }
 
   return (
     <div className="flex flex-col h-screen">
