@@ -11,6 +11,9 @@
     "lint": "biome check .",
     "format": "biome format . --write"
   },
+  "engines": {
+    "bun": "1.1.8"
+  },
   "devDependencies": {
     "@biomejs/biome": "latest"
   }
