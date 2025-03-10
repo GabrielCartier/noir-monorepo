@@ -33,7 +33,6 @@ import { toast } from 'sonner';
 import { parseEther } from 'viem';
 import { transferToken } from '../../lib/services/transfer-service';
 import { depositForVault } from '../../lib/services/vault-service';
-import { SONIC } from '../../lib/services/vault-service';
 import type { Token } from '../../types/token';
 import type { DepositDialogProps as BaseDepositDialogProps } from '../../types/vault';
 
@@ -51,7 +50,7 @@ export function DepositDialog({
   const [isOpen, setIsOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [amount, setAmount] = useState('');
-  const [selectedToken, setSelectedToken] = useState<Token>(SONIC);
+  const [selectedToken, setSelectedToken] = useState<Token>();
   const nativeBalance = useUserBalance();
   const { data: tokenBalances } = useVaultBalance(address);
 
@@ -112,6 +111,10 @@ export function DepositDialog({
 
     setIsLoading(true);
     try {
+      if (!selectedToken) {
+        toast.error('Please select a token');
+        return;
+      }
       const amountInWei = BigInt(Math.floor(Number(amount) * 1e18));
 
       // Check if user has sufficient balance
@@ -154,6 +157,8 @@ export function DepositDialog({
       setIsLoading(false);
     }
   };
+
+  console.log('selectedToken', selectedToken);
 
   return (
     <Dialog open={isOpen} onOpenChange={setIsOpen}>
@@ -203,12 +208,11 @@ export function DepositDialog({
               <div className="grid gap-2">
                 <Label htmlFor="token">Token</Label>
                 <Select
-                  value={selectedToken.symbol}
                   onValueChange={(value) => {
                     const token = SUPPORTED_TOKENS.find(
-                      (token) => token.symbol === value,
+                      (token) => token.address === value,
                     );
-                    if (token && tokenBalances[token.address] > 0n) {
+                    if (token) {
                       setSelectedToken(token);
                     }
                   }}
@@ -243,10 +247,19 @@ export function DepositDialog({
                 />
               </div>
               <DialogFooter>
-                <Button onClick={handleTokenTransfer} disabled={isLoading}>
+                <Button
+                  onClick={handleTokenTransfer}
+                  disabled={
+                    isLoading ||
+                    !selectedToken ||
+                    tokenBalances[selectedToken.address] === 0n
+                  }
+                >
                   {isLoading
                     ? 'Processing...'
-                    : `Transfer ${selectedToken.symbol}`}
+                    : tokenBalances[selectedToken.address] === 0n
+                      ? 'No balance'
+                      : `Transfer ${selectedToken?.symbol}`}
                 </Button>
               </DialogFooter>
             </div>

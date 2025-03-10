@@ -1,25 +1,13 @@
+import type { Address } from 'viem';
 import {
   simulateContract,
   waitForTransactionReceipt,
   writeContract,
 } from 'wagmi/actions';
-import type { Token } from '../../types/token';
 import type { VaultInfo, VaultStatus } from '../../types/vault';
 import { clientEnv } from '../config/client-env';
 import { wagmiConfig } from '../config/wagmi-config';
 import { wrappedSonicAbi } from '../constants/abis/wrapped-sonic-abi';
-import { SUPPORTED_TOKENS } from '../constants/supported-tokens';
-
-const SONIC_TOKEN = SUPPORTED_TOKENS.find((token) => token.symbol === 'S');
-
-if (!SONIC_TOKEN) {
-  throw new Error('Sonic token not found in supported tokens');
-}
-
-// After the check, we can safely assert that SONIC_TOKEN is a Token
-export const SONIC = SONIC_TOKEN as Token;
-
-export const WRAPPED_SONIC_ADDRESS = SONIC.address;
 
 export async function checkVaultStatus(
   walletAddress: string,
@@ -87,22 +75,22 @@ export async function depositForVault({
   vaultAddress,
   amount,
 }: {
-  address: string;
-  vaultAddress: string;
+  address: Address;
+  vaultAddress: Address;
   amount: bigint;
 }) {
   const { request } = await simulateContract(wagmiConfig, {
-    address: WRAPPED_SONIC_ADDRESS as `0x${string}`,
+    address: '0x039e2fB66102314Ce7b64Ce5Ce3E5183bc94aD38',
     abi: wrappedSonicAbi,
     functionName: 'depositFor',
-    args: [vaultAddress as `0x${string}`],
+    args: [vaultAddress],
     value: amount,
-    account: address as `0x${string}`,
+    account: address,
   });
 
   const hash = await writeContract(wagmiConfig, {
     ...request,
-    account: address as `0x${string}`,
+    account: address,
   });
 
   await waitForTransactionReceipt(wagmiConfig, { hash });

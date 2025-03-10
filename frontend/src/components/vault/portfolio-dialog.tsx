@@ -32,10 +32,6 @@ export function PortfolioDialog({
   triggerProps,
 }: PortfolioDialogProps) {
   const [isOpen, setIsOpen] = useState(false);
-  console.log('tokenBalances', tokenBalances);
-
-  // Get native S balance first
-  // const nativeS = tokenBalances[NATIVE_TOKEN_KEY];
 
   return (
     <Dialog open={isOpen} onOpenChange={setIsOpen}>
@@ -57,9 +53,6 @@ export function PortfolioDialog({
               <span className="text-sm text-muted-foreground">
                 Total Value:{' '}
               </span>
-              <span className="text-lg font-bold">
-                {/* {formatBalance(totalValueInS, 18)} S */}
-              </span>
             </div>
             <div className="text-right text-sm text-muted-foreground">
               ≈ {totalValueInUsd}
@@ -70,37 +63,16 @@ export function PortfolioDialog({
               <TableRow>
                 <TableHead>Token</TableHead>
                 <TableHead>Balance</TableHead>
-                <TableHead className="text-right">Value in S</TableHead>
                 <TableHead className="text-right">Value in USD</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {/* Display native S first */}
-              {/* {nativeS && (
-                <TableRow>
-                  <TableCell className="font-medium">
-                    {nativeS.symbol}
-                  </TableCell>
-                  <TableCell>{formatBalance(nativeS.balance, 18)}</TableCell>
-                  <TableCell className="text-right">
-                    {formatBalance(nativeS.valueInS, 18)} S
-                  </TableCell>
-                  <TableCell className="text-right">
-                    {formatUsd(nativeS.valueInUsd)}
-                  </TableCell>
-                </TableRow>
-              )} */}
-
-              {/* Display other tokens */}
               {Object.values(tokenBalances).map((tokenValue) => (
                 <TableRow key={tokenValue.symbol}>
                   <TableCell className="font-medium">
                     {tokenValue.name} ({tokenValue.symbol})
                   </TableCell>
                   <TableCell>{tokenValue.balanceFormatted}</TableCell>
-                  {/* <TableCell className="text-right">
-                    {formatBalance(balance.valueInS, 18)} S
-                  </TableCell> */}
                   <TableCell className="text-right">
                     {tokenValue.valueUsdFormatted}
                   </TableCell>
