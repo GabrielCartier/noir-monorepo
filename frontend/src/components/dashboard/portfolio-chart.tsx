@@ -20,7 +20,7 @@ export function PortfolioChart() {
   return (
     <Card>
       <div className="px-6 py-4 mb-4 bg-muted/50">
-        <h2 className="text-2xl font-semibold">Portfolio Value (Mock Data)</h2>
+        <h2 className="text-2xl font-semibold">Portfolio Value</h2>
       </div>
       <div className="h-[1px] mx-6 bg-border" />
       <CardContent>
