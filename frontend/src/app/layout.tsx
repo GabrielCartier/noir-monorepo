@@ -5,8 +5,10 @@ import { Toaster } from '@/src/components/ui/toaster';
 import { Inter } from 'next/font/google';
 import './globals.css';
 import { WalletProvider } from '@/src/components/providers/wallet-provider';
+import { metadataConfig } from '@/src/lib/constants/metadata';
 import { ThemeProvider } from 'next-themes';
 
+export const metadata = metadataConfig;
 const inter = Inter({ subsets: ['latin'] });
 
 export default function RootLayout({
