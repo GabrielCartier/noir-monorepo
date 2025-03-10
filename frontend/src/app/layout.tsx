@@ -1,5 +1,3 @@
-'use client';
-
 import { Header } from '@/src/components/header';
 import { Toaster } from '@/src/components/ui/toaster';
 import { Inter } from 'next/font/google';
