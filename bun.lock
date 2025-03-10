@@ -16,10 +16,12 @@
         "@elizaos/plugin-evm": "^0.25.6-alpha.1",
         "@elysiajs/cors": "^1.2.0",
         "axios": "^1.8.2",
+        "dotenv": "^16.4.7",
         "elysia": "latest",
         "exponential-backoff": "^3.1.2",
         "node-cache": "^5.1.2",
         "pg": "^8.13.3",
+        "undici": "^7.4.0",
         "uuid": "^11.1.0",
         "viem": "^2.23.6",
         "yargs": "^17.7.2",
@@ -28,7 +30,6 @@
       "devDependencies": {
         "@types/yargs": "^17.0.33",
         "bun-types": "latest",
-        "dotenv": "^16.4.7",
         "tsup": "8.3.5",
       },
     },
@@ -2093,6 +2094,8 @@
     "uint8arrays": ["uint8arrays@3.1.0", "", { "dependencies": { "multiformats": "^9.4.2" } }, "sha512-ei5rfKtoRO8OyOIor2Rz5fhzjThwIHJZ3uyDPnDHTXbP0aMQ1RN/6AI5B5d9dBxJOU+BvOAk7ZQ1xphsX8Lrog=="],
 
     "uncrypto": ["uncrypto@0.1.3", "", {}, "sha512-Ql87qFHB3s/De2ClA9e0gsnS6zXG27SkTiSJwjCc9MebbfapQfuPzumMIUMi38ezPZVNFcHI9sUIepeQfw8J8Q=="],
+
+    "undici": ["undici@7.4.0", "", {}, "sha512-PUQM3/es3noM24oUn10u3kNNap0AbxESOmnssmW+dOi9yGwlUSi5nTNYl3bNbTkWOF8YZDkx2tCmj9OtQ3iGGw=="],
 
     "undici-types": ["undici-types@6.19.8", "", {}, "sha512-ve2KP6f/JnbPBFyobGHuerC9g1FYGn/F8n1LWTwNxCEzd6IfqTwUQcNXgEtmmQ6DlRrC1hrSrBnCZPokRrDHjw=="],
 

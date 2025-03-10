@@ -21,13 +21,14 @@ import type { Address } from 'viem';
 
 interface PortfolioDialogProps {
   tokenBalances: Record<Address, TokenValue>;
-  totalValueInS: bigint;
+  totalValueInS: string;
   totalValueInUsd: string;
   triggerProps?: React.ButtonHTMLAttributes<HTMLButtonElement>;
 }
 
 export function PortfolioDialog({
   tokenBalances,
+  totalValueInS,
   totalValueInUsd,
   triggerProps,
 }: PortfolioDialogProps) {
@@ -52,6 +53,9 @@ export function PortfolioDialog({
             <div className="text-right">
               <span className="text-sm text-muted-foreground">
                 Total Value:{' '}
+              </span>
+              <span className="text-sm text-muted-foreground">
+                {totalValueInS} S
               </span>
             </div>
             <div className="text-right text-sm text-muted-foreground">

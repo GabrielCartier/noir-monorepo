@@ -257,7 +257,8 @@ export function DepositDialog({
                 >
                   {isLoading
                     ? 'Processing...'
-                    : tokenBalances[selectedToken.address] === 0n
+                    : selectedToken &&
+                        tokenBalances[selectedToken.address] === 0n
                       ? 'No balance'
                       : `Transfer ${selectedToken?.symbol}`}
                 </Button>

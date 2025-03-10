@@ -171,6 +171,7 @@ export function VaultValue() {
         </div>
         <PortfolioDialog
           tokenBalances={tokens}
+          totalValueInS={totalValueNativeFormatted}
           totalValueInUsd={totalValueUsdFormatted}
           triggerProps={
             {
