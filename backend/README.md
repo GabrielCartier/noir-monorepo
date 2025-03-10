@@ -6,6 +6,8 @@ To start the development server run:
 bun run dev
 ```
 
+## Curl for getting silo data
+
 
 ## Curl for creating a vault
 

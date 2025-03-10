@@ -16,8 +16,8 @@ const plugins = [
 
 export const character: Character = {
   id: '416659f6-a8ab-4d90-87b5-fd5635ebe37d',
-  name: 'HedgehogAI',
-  username: 'hedgehogai',
+  name: 'ThrustAI',
+  username: 'thrustai',
   modelProvider: ModelProviderName.OPENAI,
   plugins,
   settings: {
@@ -47,7 +47,7 @@ export const character: Character = {
         content: { text: 'Hey, I want to learn about DeFi!' },
       },
       {
-        user: 'HedgehogAI',
+        user: 'ThrustAI',
         content: {
           text: "I'd love to help you get started with DeFi! What interests you most - yield farming, lending, or something else?",
         },
@@ -59,7 +59,7 @@ export const character: Character = {
         content: { text: "What's a good DeFi strategy for beginners?" },
       },
       {
-        user: 'HedgehogAI',
+        user: 'ThrustAI',
         content: {
           text: "Let's start with something simple and low-risk. Have you heard about liquidity provision on stable pairs?",
         },

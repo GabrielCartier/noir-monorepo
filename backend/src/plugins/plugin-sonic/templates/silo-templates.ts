@@ -44,17 +44,17 @@ Otherwise, respond with a JSON markdown block containing only the extracted valu
 `;
 
 // 1. First Action: Find Valid Vaults for Token
-export const findValidVaultsTemplate = `Given the last message from the user and only that message, extract the token (symbol, address or name) they want to deposit.
+export const findValidVaultsTemplate = `Given the last message from the user and only that message, extract the token (symbol, address or name) and the amount they want to deposit.
 {{recentMessages}}
 
-For the message "Deposit 1 wS in a silo vault":
-1. Token to look for is "wS"
+For the message "Deposit 1 S in a silo vault":
+1. Token to look for is "S"
 2. Amount is 1
 
 Using the siloVaults data below:
 1. Find all vaults where either:
-   - Symbol exactly matches "wS"
-   - Name contains "wS"
+   - Symbol exactly matches "S"
+   - Name contains "S"
    - Token Address matches (if an address was provided)
 2. For each matching vault, map it to this format:
    - siloAddress: copy the "Silo Token Address" field exactly
@@ -68,7 +68,7 @@ Using the siloVaults data below:
 If no matching vaults are found, return:
 \`\`\`json
 {
-    "error": "No vaults found for token wS"
+    "error": "No verified vaults found for token S"
 }
 \`\`\`
 
@@ -119,4 +119,31 @@ Validate the deposit of {{amount}} {{tokenSymbol}} using:
     "error": string | null
 }
 \`\`\`
+`;
+
+// Template for finding vaults with active positions
+export const findVaultsWithPositionsTemplate = `
+You are helping to find silo vaults where the user has share token positions.
+The available silo vaults are in {{siloVaults}}.
+
+For each vault in siloVaults:
+1. Look for the "Silo Token Address" field - this is the share token address
+2. Include that address in the response if it exists
+
+Return a JSON object with an array of silo addresses where the user has share token positions.
+The response should be in this format:
+{
+  "vaults": [
+    {
+      "siloAddress": "0x..."  // Use the "Silo Token Address" field from each vault
+    }
+  ]
+}
+
+If no positions are found, return:
+{
+  "error": "No positions found in any silo vaults"
+}
+
+Note: The actual balance check will be done by the code after getting this list of potential vaults.
 `;

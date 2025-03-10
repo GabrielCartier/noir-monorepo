@@ -25,8 +25,7 @@ import {
   viemPublicClientSchema,
   viemWalletClientSchema,
 } from '../../../../validators/viem';
-import { initSonicProvider } from '../../providers/sonic';
-import { sonicProvider } from '../../providers/sonic';
+import { initSonicProvider, sonicProvider } from '../../providers/sonic';
 import { findStakingAmountTemplate } from '../../templates/stake-s-template';
 
 interface MessageMetadata {
@@ -119,9 +118,7 @@ async function stakeS(
         vaultAddress: userVaultAddress,
         tokenAddress: sonicTokenAddress,
         balance: vaultBalance.toString(),
-        balanceInEther: formatUnits(vaultBalance, decimals),
         required: bigIntAmount.toString(),
-        requiredInEther: formatUnits(bigIntAmount, decimals),
       });
 
       if (vaultBalance < bigIntAmount) {
